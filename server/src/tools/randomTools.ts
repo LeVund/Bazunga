@@ -34,23 +34,23 @@ export const GetPopulation = tool(
  },
 );
 
-export const GetPopulation_GPT = tool(
- async ({ location }) => {
-  // ici tu appelles une API, une DB, ou une source réelle
-  const population = await fetchPopulation(location);
+// export const GetPopulation_GPT = tool(
+//  async ({ location }) => {
+//   // ici tu appelles une API, une DB, ou une source réelle
+//   const population = await fetchPopulation(location);
 
-  return population;
- },
- {
-  name: "get_population",
-  description: "Get the current population of a given city",
-  schema: z.object({
-   location: z
-    .string()
-    .describe("City and country or state, e.g. Paris, FR or San Francisco, CA"),
-  }),
- },
-);
+//   return population;
+//  },
+//  {
+//   name: "get_population",
+//   description: "Get the current population of a given city",
+//   schema: z.object({
+//    location: z
+//     .string()
+//     .describe("City and country or state, e.g. Paris, FR or San Francisco, CA"),
+//   }),
+//  },
+// );
 
 export const AddNumbers = tool(
  ({ a, b }) => {

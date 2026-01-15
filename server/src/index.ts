@@ -1,35 +1,30 @@
-import { ChatOpenAI, tools } from "@langchain/openai";
-import {
- GetPopulation,
- GetPopulation_legacy,
- GetWeather,
- AddNumbers,
-} from "./tools/randomTools";
-import ora from "ora";
-import minimist from "minimist";
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { handleUserInput } from "./api/routes/userInput";
 
-// Doc found here : https://v03.api.js.langchain.com/classes/_langchain_openai.ChatOpenAI.html
-export const llm = new ChatOpenAI({
- model: "Ministral-3-8B-Instruct-2512-4bit",
- temperature: 0,
- maxTokens: undefined,
- timeout: undefined,
- maxRetries: 2,
- apiKey: "local_env",
- configuration: {
-  baseURL: "http://127.0.0.1:1234/v1",
- },
+const app = new Hono();
+
+const PORT = process.env.SERVER_PORT || 8080;
+
+app.use("*", cors());
+
+app.post("/user-input", handleUserInput);
+
+app.get("/", (c) => {
+  return c.json({
+    message: "LangChain API Server",
+    routes: {
+      "POST /user-input": "Send a message to the LangChain agent",
+    },
+  });
 });
-const llmWithTools = llm.bindTools([AddNumbers, GetWeather, GetPopulation]);
 
-async function callMyBot() {
- const spinner = ora("En attente de la réponse de l'agent...").start();
+console.log(`Server starting on port ${PORT}...`);
+console.log(`Available routes:`);
+console.log(`  GET  / - Server info`);
+console.log(`  POST /user-input - Process user messages`);
 
- const res = await llmWithTools.invoke("coucou");
-
- spinner.succeed("Réponse reçue!");
- console.log(res);
-}
-
-callMyBot();
-// callMyBot(args.prompt);
+export default {
+  port: PORT,
+  fetch: app.fetch,
+};
