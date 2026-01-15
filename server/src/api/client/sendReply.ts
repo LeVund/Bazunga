@@ -1,6 +1,8 @@
+import { SendReplyData } from "@core/types/langchain";
+
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3000";
 
-export async function sendReply(data: any): Promise<void> {
+export async function sendReply(data: SendReplyData): Promise<void> {
   try {
     const response = await fetch(`${CLIENT_URL}/reply`, {
       method: "POST",

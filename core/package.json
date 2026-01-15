@@ -1,0 +1,11 @@
+{
+  "name": "@langchain-test/core",
+  "version": "1.0.0",
+  "description": "Types partagés pour LangChain Test",
+  "main": "types/index.ts",
+  "types": "types/index.ts",
+  "scripts": {},
+  "keywords": ["types", "typescript", "langchain", "lmstudio"],
+  "author": "",
+  "license": "ISC"
+}
