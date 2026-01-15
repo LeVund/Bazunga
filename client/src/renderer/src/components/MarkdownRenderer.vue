@@ -28,13 +28,13 @@ const renderedHtml = computed(() => {
 .markdown-body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
     Ubuntu, Cantarell, sans-serif;
-  line-height: 1.6;
-  color: #e0e0e0;
+  line-height: var(--ui-line-height-base);
+  color: var(--ui-color-text-primary);
 }
 
 .markdown-body :deep(h1) {
   font-size: 2em;
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid var(--ui-color-border-subtle);
   padding-bottom: 0.3em;
   margin-top: 1em;
   margin-bottom: 0.5em;
@@ -42,7 +42,7 @@ const renderedHtml = computed(() => {
 
 .markdown-body :deep(h2) {
   font-size: 1.5em;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--ui-color-border-default);
   padding-bottom: 0.3em;
   margin-top: 1em;
   margin-bottom: 0.5em;
@@ -59,17 +59,17 @@ const renderedHtml = computed(() => {
 }
 
 .markdown-body :deep(code) {
-  background-color: #2d2d2d;
+  background-color: var(--ui-color-background-code-inline);
   padding: 0.2em 0.4em;
-  border-radius: 4px;
-  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  border-radius: var(--ui-radius-sm);
+  font-family: var(--ui-font-family-code);
   font-size: 0.9em;
 }
 
 .markdown-body :deep(pre) {
-  background-color: #1e1e1e;
+  background-color: var(--ui-color-background-code);
   padding: 1em;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-md);
   overflow-x: auto;
   margin: 1em 0;
 }
@@ -80,10 +80,10 @@ const renderedHtml = computed(() => {
 }
 
 .markdown-body :deep(blockquote) {
-  border-left: 4px solid #646cff;
+  border-left: 4px solid var(--ui-color-primary);
   padding-left: 1em;
   margin: 1em 0;
-  color: #aaa;
+  color: var(--ui-color-text-muted);
   font-style: italic;
 }
 
@@ -105,17 +105,17 @@ const renderedHtml = computed(() => {
 
 .markdown-body :deep(th),
 .markdown-body :deep(td) {
-  border: 1px solid #444;
+  border: 1px solid var(--ui-color-border-subtle);
   padding: 0.5em 1em;
   text-align: left;
 }
 
 .markdown-body :deep(th) {
-  background-color: #2d2d2d;
+  background-color: var(--ui-color-background-code-inline);
 }
 
 .markdown-body :deep(a) {
-  color: #646cff;
+  color: var(--ui-color-primary);
   text-decoration: none;
 }
 
@@ -124,6 +124,6 @@ const renderedHtml = computed(() => {
 }
 
 .markdown-body :deep(strong) {
-  color: #fff;
+  color: var(--ui-color-text-strong);
 }
 </style>

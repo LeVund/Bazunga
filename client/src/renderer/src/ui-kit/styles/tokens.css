@@ -1,0 +1,157 @@
+/**
+ * Design System Tokens
+ * Variables CSS pour assurer la cohérence du design
+ */
+
+:root {
+  /* ==================== COULEURS ==================== */
+
+  /* Couleurs de fond */
+  --ui-color-background-primary: #1a1a1a;
+  --ui-color-background-secondary: #242424;
+  --ui-color-background-tertiary: #2a2a2a;
+  --ui-color-background-elevated: #333;
+  --ui-color-background-code: #1e1e1e;
+  --ui-color-background-code-inline: #2d2d2d;
+
+  /* Couleurs de texte */
+  --ui-color-text-primary: #e0e0e0;
+  --ui-color-text-secondary: #888;
+  --ui-color-text-tertiary: #666;
+  --ui-color-text-muted: #aaa;
+  --ui-color-text-strong: #fff;
+
+  /* Couleurs de bordure */
+  --ui-color-border-default: #333;
+  --ui-color-border-subtle: #444;
+
+  /* Couleurs d'accent (primaire) */
+  --ui-color-primary: #646cff;
+  --ui-color-primary-hover: #5558dd;
+  --ui-color-primary-active: #7580ff;
+
+  /* Couleurs de scrollbar */
+  --ui-color-scrollbar-track: #1a1a1a;
+  --ui-color-scrollbar-thumb: #444;
+  --ui-color-scrollbar-thumb-hover: #555;
+
+  /* ==================== ESPACEMENTS ==================== */
+
+  /* Espacements internes (padding) */
+  --ui-spacing-xs: 0.25rem;    /* 4px */
+  --ui-spacing-sm: 0.5rem;     /* 8px */
+  --ui-spacing-md: 0.75rem;    /* 12px */
+  --ui-spacing-base: 1rem;     /* 16px */
+  --ui-spacing-lg: 1.5rem;     /* 24px */
+  --ui-spacing-xl: 2rem;       /* 32px */
+  --ui-spacing-2xl: 3rem;      /* 48px */
+
+  /* Espacements externes (margin) - même échelle */
+  --ui-margin-xs: var(--ui-spacing-xs);
+  --ui-margin-sm: var(--ui-spacing-sm);
+  --ui-margin-md: var(--ui-spacing-md);
+  --ui-margin-base: var(--ui-spacing-base);
+  --ui-margin-lg: var(--ui-spacing-lg);
+  --ui-margin-xl: var(--ui-spacing-xl);
+  --ui-margin-2xl: var(--ui-spacing-2xl);
+
+  /* Espacements spéciaux pour gaps */
+  --ui-gap-xs: var(--ui-spacing-xs);
+  --ui-gap-sm: var(--ui-spacing-sm);
+  --ui-gap-md: var(--ui-spacing-md);
+  --ui-gap-base: var(--ui-spacing-base);
+  --ui-gap-lg: var(--ui-spacing-lg);
+
+  /* ==================== RAYONS DE BORDURE ==================== */
+
+  --ui-radius-sm: 4px;
+  --ui-radius-base: 6px;
+  --ui-radius-md: 8px;
+  --ui-radius-lg: 12px;
+  --ui-radius-full: 50%;
+  --ui-radius-circle: 9999px;
+
+  /* ==================== TAILLES ==================== */
+
+  /* Largeurs */
+  --ui-width-scrollbar: 8px;
+  --ui-width-sidebar-toggle: 24px;
+  --ui-width-sidebar-panel: 320px;
+  --ui-width-content-max: 900px;
+
+  /* Hauteurs */
+  --ui-height-sidebar-toggle: 80px;
+  --ui-height-scrollbar: 8px;
+
+  /* ==================== TYPOGRAPHIE ==================== */
+
+  /* Familles de police */
+  --ui-font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --ui-font-family-code: 'Fira Code', 'Monaco', 'Consolas', monospace;
+
+  /* Tailles de police */
+  --ui-font-size-xs: 0.75rem;   /* 12px */
+  --ui-font-size-sm: 0.9em;     /* ~14px */
+  --ui-font-size-base: 1rem;    /* 16px */
+  --ui-font-size-md: 1.25em;    /* ~20px */
+  --ui-font-size-lg: 1.5em;     /* ~24px */
+  --ui-font-size-xl: 1.5rem;    /* 24px */
+  --ui-font-size-2xl: 2em;      /* ~32px */
+
+  /* Poids de police */
+  --ui-font-weight-normal: 400;
+  --ui-font-weight-medium: 500;
+  --ui-font-weight-semibold: 600;
+  --ui-font-weight-bold: 700;
+
+  /* Hauteur de ligne */
+  --ui-line-height-tight: 1.5;
+  --ui-line-height-base: 1.6;
+  --ui-line-height-relaxed: 1.8;
+
+  /* ==================== TRANSITIONS ==================== */
+
+  --ui-transition-fast: 0.2s ease;
+  --ui-transition-base: 0.3s ease-out;
+  --ui-transition-smooth: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ==================== Z-INDEX ==================== */
+
+  --ui-z-index-base: 1;
+  --ui-z-index-dropdown: 10;
+  --ui-z-index-sticky: 50;
+  --ui-z-index-sidebar: 100;
+  --ui-z-index-modal: 1000;
+  --ui-z-index-tooltip: 2000;
+
+  /* ==================== OMBRES ==================== */
+
+  --ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --ui-shadow-base: 0 2px 4px rgba(0, 0, 0, 0.4);
+  --ui-shadow-md: 0 4px 8px rgba(0, 0, 0, 0.5);
+  --ui-shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.6);
+
+  /* ==================== ANIMATIONS ==================== */
+
+  --ui-animation-spin: spin 1s linear infinite;
+  --ui-animation-slide-in: slideIn 0.3s ease-out;
+}
+
+/* Keyframes pour les animations */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
