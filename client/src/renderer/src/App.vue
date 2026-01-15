@@ -147,6 +147,8 @@ function handleKeydown(event: KeyboardEvent) {
           </div>
         </div>
       </div>
+
+      <SidePanel />
     </main>
 
     <footer class="footer">
@@ -167,8 +169,6 @@ function handleKeydown(event: KeyboardEvent) {
         </button>
       </div>
     </footer>
-
-    <SidePanel />
   </div>
 </template>
 
@@ -225,6 +225,7 @@ function handleKeydown(event: KeyboardEvent) {
   flex: 1;
   overflow-y: auto;
   padding: 2rem;
+  position: relative;
 }
 
 .content-area {
