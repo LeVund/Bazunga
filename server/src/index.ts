@@ -6,7 +6,17 @@ const app = new Hono();
 
 const PORT = process.env.SERVER_PORT || 8080;
 
-app.use("*", cors());
+app.use(
+  "*",
+  cors({
+    origin: "*",
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    exposeHeaders: ["Content-Length"],
+    maxAge: 600,
+    credentials: true,
+  })
+);
 
 app.post("/user-input", handleUserInput);
 

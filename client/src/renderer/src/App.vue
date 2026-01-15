@@ -1,12 +1,21 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import MarkdownRenderer from './components/MarkdownRenderer.vue'
-import { apiService, type ApiResponse } from './services/api'
+import { apiService } from './services/api'
+
+interface Message {
+  id: number
+  type: 'user' | 'assistant'
+  content: string
+  timestamp: number
+  isLoading?: boolean
+}
 
 const prompt = ref('')
-const response = ref<ApiResponse | null>(null)
+const messages = ref<Message[]>([])
 const isLoading = ref(false)
 const activeRoute = ref('/chat')
+let messageIdCounter = 0
 
 const routes = [
   { path: '/chat', label: 'Chat' },
@@ -17,23 +26,69 @@ const routes = [
 async function sendPrompt() {
   if (!prompt.value.trim() || isLoading.value) return
 
+  const userMessage = prompt.value
+  prompt.value = ''
+
+  // Ajouter le message de l'utilisateur immédiatement
+  messages.value.push({
+    id: messageIdCounter++,
+    type: 'user',
+    content: userMessage,
+    timestamp: Date.now()
+  })
+
+  // Ajouter un message de loader
+  const loaderMessage: Message = {
+    id: messageIdCounter++,
+    type: 'assistant',
+    content: '',
+    timestamp: Date.now(),
+    isLoading: true
+  }
+  messages.value.push(loaderMessage)
+
   isLoading.value = true
+
   try {
-    response.value = await apiService.sendPrompt(prompt.value)
-    prompt.value = ''
+    const response = await apiService.sendPrompt(userMessage)
+
+    // Remplacer le loader par la vraie réponse
+    const loaderIndex = messages.value.findIndex(m => m.id === loaderMessage.id)
+    if (loaderIndex !== -1) {
+      messages.value[loaderIndex] = {
+        id: loaderMessage.id,
+        type: 'assistant',
+        content: response.content,
+        timestamp: response.timestamp,
+        isLoading: false
+      }
+    }
+  } catch (error) {
+    // En cas d'erreur, remplacer le loader par un message d'erreur
+    const loaderIndex = messages.value.findIndex(m => m.id === loaderMessage.id)
+    if (loaderIndex !== -1) {
+      messages.value[loaderIndex] = {
+        id: loaderMessage.id,
+        type: 'assistant',
+        content: `**Erreur**: ${error instanceof Error ? error.message : 'Impossible de contacter le serveur'}`,
+        timestamp: Date.now(),
+        isLoading: false
+      }
+    }
   } finally {
     isLoading.value = false
+    // Scroll vers le bas
+    await nextTick()
+    const main = document.querySelector('.main')
+    if (main) {
+      main.scrollTop = main.scrollHeight
+    }
   }
 }
 
 async function fetchRoute(path: string) {
   activeRoute.value = path
-  isLoading.value = true
-  try {
-    response.value = await apiService.fetchMarkdown(path)
-  } finally {
-    isLoading.value = false
-  }
+  // Cette fonction pourrait être implémentée plus tard si nécessaire
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -62,23 +117,33 @@ function handleKeydown(event: KeyboardEvent) {
 
     <main class="main">
       <div class="content-area">
-        <div v-if="isLoading" class="loading">
-          <div class="spinner"></div>
-          <span>Chargement...</span>
+        <div v-if="messages.length === 0" class="placeholder">
+          <p>Envoyez un message pour commencer la conversation.</p>
         </div>
-        <div v-else-if="response" class="response">
-          <MarkdownRenderer :content="response.content" />
-          <div class="meta">
-            <span :class="['status', response.status]">
-              {{ response.status === 'success' ? 'Succès' : 'Erreur' }}
-            </span>
-            <span class="timestamp">
-              {{ new Date(response.timestamp).toLocaleTimeString() }}
-            </span>
+        <div v-else class="messages-container">
+          <div
+            v-for="message in messages"
+            :key="message.id"
+            :class="['message', message.type]"
+          >
+            <div class="message-content">
+              <div v-if="message.isLoading" class="loading">
+                <div class="spinner"></div>
+                <span>Le serveur réfléchit...</span>
+              </div>
+              <template v-else>
+                <div v-if="message.type === 'user'" class="user-text">
+                  {{ message.content }}
+                </div>
+                <MarkdownRenderer v-else :content="message.content" />
+              </template>
+            </div>
+            <div class="message-meta">
+              <span class="timestamp">
+                {{ new Date(message.timestamp).toLocaleTimeString() }}
+              </span>
+            </div>
           </div>
-        </div>
-        <div v-else class="placeholder">
-          <p>Sélectionnez une route ou envoyez un message pour commencer.</p>
         </div>
       </div>
     </main>
@@ -164,19 +229,88 @@ function handleKeydown(event: KeyboardEvent) {
   margin: 0 auto;
 }
 
+.messages-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  max-width: 80%;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message.user {
+  align-self: flex-end;
+}
+
+.message.assistant {
+  align-self: flex-start;
+}
+
+.message-content {
+  background-color: #242424;
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  word-wrap: break-word;
+}
+
+.message.user .message-content {
+  background-color: #646cff;
+  color: #fff;
+}
+
+.user-text {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.message.assistant .message-content {
+  background-color: #2a2a2a;
+}
+
+.message-meta {
+  display: flex;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.message.user .message-meta {
+  justify-content: flex-end;
+}
+
+.message.assistant .message-meta {
+  justify-content: flex-start;
+}
+
+.timestamp {
+  color: #666;
+}
+
 .loading {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  padding: 3rem;
+  gap: 0.75rem;
   color: #888;
 }
 
 .spinner {
-  width: 24px;
-  height: 24px;
-  border: 3px solid #333;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #333;
   border-top-color: #646cff;
   border-radius: 50%;
   animation: spin 1s linear infinite;
@@ -186,41 +320,6 @@ function handleKeydown(event: KeyboardEvent) {
   to {
     transform: rotate(360deg);
   }
-}
-
-.response {
-  background-color: #242424;
-  border-radius: 12px;
-  padding: 1.5rem;
-}
-
-.meta {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #333;
-  font-size: 0.85rem;
-}
-
-.status {
-  padding: 0.25rem 0.75rem;
-  border-radius: 4px;
-  font-weight: 500;
-}
-
-.status.success {
-  background-color: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
-}
-
-.status.error {
-  background-color: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
-}
-
-.timestamp {
-  color: #666;
 }
 
 .placeholder {

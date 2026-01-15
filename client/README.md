@@ -86,7 +86,7 @@ const response = await apiService.sendPrompt('Votre question')
 Pour utiliser l'API réelle au lieu des mocks :
 
 ```typescript
-const apiService = new ApiService('http://localhost:3000', false)
+const apiService = new ApiService('http://localhost:8080', false)
 ```
 
 ### Composant MarkdownRenderer
@@ -116,7 +116,7 @@ Pour connecter au serveur réel :
 
 1. Modifier `src/renderer/src/services/api.ts` :
    ```typescript
-   export const apiService = new ApiService('http://localhost:3000', false)
+   export const apiService = new ApiService('http://localhost:8080', false)
    ```
 
 2. S'assurer que le serveur backend tourne sur le port 3000

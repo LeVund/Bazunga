@@ -1,12 +1,12 @@
 export interface ApiResponse {
-  content: string
-  status: 'success' | 'error'
-  timestamp: number
+ content: string;
+ status: "success" | "error";
+ timestamp: number;
 }
 
 // Données mockées pour le développement
 const mockResponses: Record<string, string> = {
-  '/chat': `# Réponse de l'IA
+ "/chat": `# Réponse de l'IA
 
 Voici une **réponse formatée** en markdown.
 
@@ -26,7 +26,7 @@ console.log(greeting);
 > Ceci est une citation importante.
 `,
 
-  '/help': `# Aide
+ "/help": `# Aide
 
 ## Commandes disponibles
 
@@ -43,7 +43,7 @@ console.log(greeting);
 3. Attendez la réponse de l'IA
 `,
 
-  '/status': `# Status du serveur
+ "/status": `# Status du serveur
 
 - **État**: En ligne
 - **Version**: 1.0.0
@@ -53,33 +53,35 @@ console.log(greeting);
 
 - Requêtes traitées: **1,234**
 - Temps de réponse moyen: **120ms**
-`
-}
+`,
+};
 
 // Simule un délai réseau
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class ApiService {
-  private baseUrl: string
-  private useMock: boolean
+ private baseUrl: string;
+ private useMock: boolean;
 
-  constructor(baseUrl = 'http://localhost:3000', useMock = true) {
-    this.baseUrl = baseUrl
-    this.useMock = useMock
+ constructor(baseUrl = "http://localhost:8080", useMock = false) {
+  this.baseUrl = baseUrl;
+  this.useMock = useMock;
+ }
+
+ async fetchMarkdown(endpoint: string): Promise<ApiResponse> {
+  if (this.useMock) {
+   return this.mockFetch(endpoint);
   }
+  return this.realFetch(endpoint);
+ }
 
-  async fetchMarkdown(endpoint: string): Promise<ApiResponse> {
-    if (this.useMock) {
-      return this.mockFetch(endpoint)
-    }
-    return this.realFetch(endpoint)
-  }
+ private async mockFetch(endpoint: string): Promise<ApiResponse> {
+  // Simule un délai réseau de 300-800ms
+  await delay(300 + Math.random() * 500);
 
-  private async mockFetch(endpoint: string): Promise<ApiResponse> {
-    // Simule un délai réseau de 300-800ms
-    await delay(300 + Math.random() * 500)
-
-    const content = mockResponses[endpoint] || `# Erreur 404
+  const content =
+   mockResponses[endpoint] ||
+   `# Erreur 404
 
 L'endpoint \`${endpoint}\` n'existe pas.
 
@@ -88,40 +90,40 @@ L'endpoint \`${endpoint}\` n'existe pas.
 - \`/chat\` - Conversation avec l'IA
 - \`/help\` - Aide
 - \`/status\` - Status du serveur
-`
+`;
 
-    return {
-      content,
-      status: mockResponses[endpoint] ? 'success' : 'error',
-      timestamp: Date.now()
-    }
+  return {
+   content,
+   status: mockResponses[endpoint] ? "success" : "error",
+   timestamp: Date.now(),
+  };
+ }
+
+ private async realFetch(endpoint: string): Promise<ApiResponse> {
+  const response = await fetch(`${this.baseUrl}${endpoint}`);
+
+  if (!response.ok) {
+   return {
+    content: `# Erreur ${response.status}\n\n${response.statusText}`,
+    status: "error",
+    timestamp: Date.now(),
+   };
   }
 
-  private async realFetch(endpoint: string): Promise<ApiResponse> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`)
+  const data = await response.json();
+  return {
+   content: data.content || data.markdown || JSON.stringify(data, null, 2),
+   status: "success",
+   timestamp: Date.now(),
+  };
+ }
 
-    if (!response.ok) {
-      return {
-        content: `# Erreur ${response.status}\n\n${response.statusText}`,
-        status: 'error',
-        timestamp: Date.now()
-      }
-    }
+ async sendPrompt(prompt: string): Promise<ApiResponse> {
+  if (this.useMock) {
+   await delay(500 + Math.random() * 1000);
 
-    const data = await response.json()
-    return {
-      content: data.content || data.markdown || JSON.stringify(data, null, 2),
-      status: 'success',
-      timestamp: Date.now()
-    }
-  }
-
-  async sendPrompt(prompt: string): Promise<ApiResponse> {
-    if (this.useMock) {
-      await delay(500 + Math.random() * 1000)
-
-      return {
-        content: `# Réponse à votre question
+   return {
+    content: `# Réponse à votre question
 
 Vous avez demandé: **"${prompt}"**
 
@@ -143,25 +145,37 @@ Voici une réponse mockée à votre question. En production, cette réponse vien
 }
 \`\`\`
 `,
-        status: 'success',
-        timestamp: Date.now()
-      }
-    }
-
-    const response = await fetch(`${this.baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt })
-    })
-
-    const data = await response.json()
-    return {
-      content: data.content || data.response,
-      status: response.ok ? 'success' : 'error',
-      timestamp: Date.now()
-    }
+    status: "success",
+    timestamp: Date.now(),
+   };
   }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 secondes timeout
+
+  try {
+   console.log("toto");
+   const response = await fetch(`${this.baseUrl}/user-input`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: prompt }),
+    signal: controller.signal,
+   });
+
+   clearTimeout(timeoutId);
+
+   const data = await response.json();
+   return {
+    content: data.reply || data.message || JSON.stringify(data),
+    status: response.ok ? "success" : "error",
+    timestamp: Date.now(),
+   };
+  } catch (error) {
+   clearTimeout(timeoutId);
+   throw error;
+  }
+ }
 }
 
 // Instance singleton
-export const apiService = new ApiService()
+export const apiService = new ApiService();
