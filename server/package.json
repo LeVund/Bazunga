@@ -1,0 +1,28 @@
+{
+  "name": "langchain-test",
+  "version": "1.0.0",
+  "description": "Control IA agents through LangChain",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts"
+  },
+  "keywords": [],
+  "devDependencies": {
+    "@types/minimist": "^1.2.5",
+    "@types/node": "^25.0.8",
+    "bun-types": "^1.3.6",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@langchain/anthropic": "^1.3.8",
+    "@langchain/core": "^1.1.13",
+    "@langchain/openai": "^1.2.2",
+    "langchain": "^1.2.8",
+    "minimist": "^1.2.8",
+    "ora": "^9.0.0"
+  }
+}
