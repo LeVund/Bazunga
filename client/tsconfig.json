@@ -11,7 +11,8 @@
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {
-      "@/*": ["./src/renderer/src/*"]
+      "@/*": ["./src/renderer/src/*"],
+      "@core/*": ["../core/*"]
     }
   },
   "include": [

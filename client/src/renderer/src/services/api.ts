@@ -1,4 +1,6 @@
-export interface ApiResponse {
+import { ApiResponse as ServerApiResponse } from "@core/types";
+
+export interface ClientApiResponse {
  content: string;
  status: "success" | "error";
  timestamp: number;
@@ -68,14 +70,14 @@ export class ApiService {
   this.useMock = useMock;
  }
 
- async fetchMarkdown(endpoint: string): Promise<ApiResponse> {
+ async fetchMarkdown(endpoint: string): Promise<ClientApiResponse> {
   if (this.useMock) {
    return this.mockFetch(endpoint);
   }
   return this.realFetch(endpoint);
  }
 
- private async mockFetch(endpoint: string): Promise<ApiResponse> {
+ private async mockFetch(endpoint: string): Promise<ClientApiResponse> {
   // Simule un délai réseau de 300-800ms
   await delay(300 + Math.random() * 500);
 
@@ -99,7 +101,7 @@ L'endpoint \`${endpoint}\` n'existe pas.
   };
  }
 
- private async realFetch(endpoint: string): Promise<ApiResponse> {
+ private async realFetch(endpoint: string): Promise<ClientApiResponse> {
   const response = await fetch(`${this.baseUrl}${endpoint}`);
 
   if (!response.ok) {
@@ -118,7 +120,7 @@ L'endpoint \`${endpoint}\` n'existe pas.
   };
  }
 
- async sendPrompt(prompt: string): Promise<ApiResponse> {
+ async sendPrompt(prompt: string): Promise<ClientApiResponse> {
   if (this.useMock) {
    await delay(500 + Math.random() * 1000);
 
@@ -154,7 +156,6 @@ Voici une réponse mockée à votre question. En production, cette réponse vien
   const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 secondes timeout
 
   try {
-   console.log("toto");
    const response = await fetch(`${this.baseUrl}/user-input`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -164,12 +165,21 @@ Voici une réponse mockée à votre question. En production, cette réponse vien
 
    clearTimeout(timeoutId);
 
-   const data = await response.json();
-   return {
-    content: data.reply || data.message || JSON.stringify(data),
-    status: response.ok ? "success" : "error",
-    timestamp: Date.now(),
-   };
+   const data: ServerApiResponse = await response.json();
+
+   if (data.success) {
+    return {
+     content: data.reply,
+     status: "success",
+     timestamp: Date.now(),
+    };
+   } else {
+    return {
+     content: `# Erreur\n\n${data.error}`,
+     status: "error",
+     timestamp: Date.now(),
+    };
+   }
   } catch (error) {
    clearTimeout(timeoutId);
    throw error;

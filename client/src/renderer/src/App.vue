@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
 import MarkdownRenderer from './components/MarkdownRenderer.vue'
+import SidePanel from './components/SidePanel.vue'
 import { apiService } from './services/api'
 
 interface Message {
@@ -166,6 +167,8 @@ function handleKeydown(event: KeyboardEvent) {
         </button>
       </div>
     </footer>
+
+    <SidePanel />
   </div>
 </template>
 
