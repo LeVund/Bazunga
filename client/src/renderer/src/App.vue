@@ -2,6 +2,7 @@
 import { ref, nextTick } from "vue";
 import MarkdownRenderer from "./components/MarkdownRenderer.vue";
 import SidePanel from "./components/SidePanel.vue";
+import MarkdownToolbar from "./components/MarkdownToolbar.vue";
 import { apiService } from "./services/api";
 
 interface Message {
@@ -16,6 +17,7 @@ const prompt = ref("");
 const messages = ref<Message[]>([]);
 const isLoading = ref(false);
 const activeRoute = ref("/chat");
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
 let messageIdCounter = 0;
 
 const routes = [
@@ -102,6 +104,10 @@ function handleKeydown(event: KeyboardEvent) {
   sendPrompt();
  }
 }
+
+function handleFormat(newText: string) {
+ prompt.value = newText;
+}
 </script>
 
 <template>
@@ -121,32 +127,34 @@ function handleKeydown(event: KeyboardEvent) {
   </header>
 
   <main class="main">
-   <div class="content-area">
-    <div v-if="messages.length === 0" class="placeholder">
-     <p>Envoyez un message pour commencer la conversation.</p>
-    </div>
-    <div v-else class="messages-container">
-     <div
-      v-for="message in messages"
-      :key="message.id"
-      :class="['message', message.type]"
-     >
-      <div class="message-content">
-       <div v-if="message.isLoading" class="loading">
-        <div class="spinner"></div>
-        <span>Le serveur réfléchit...</span>
-       </div>
-       <template v-else>
-        <div v-if="message.type === 'user'" class="user-text">
-         {{ message.content }}
+   <div>
+    <div class="content-area">
+     <div v-if="messages.length === 0" class="placeholder">
+      <p>Envoyez un message pour commencer la conversation.</p>
+     </div>
+     <div v-else class="messages-container">
+      <div
+       v-for="message in messages"
+       :key="message.id"
+       :class="['message', message.type]"
+      >
+       <div class="message-content">
+        <div v-if="message.isLoading" class="loading">
+         <div class="spinner"></div>
+         <span>Le serveur réfléchit...</span>
         </div>
-        <MarkdownRenderer v-else :content="message.content" />
-       </template>
-      </div>
-      <div class="message-meta">
-       <span class="timestamp">
-        {{ new Date(message.timestamp).toLocaleTimeString() }}
-       </span>
+        <template v-else>
+         <div v-if="message.type === 'user'" class="user-text">
+          {{ message.content }}
+         </div>
+         <MarkdownRenderer v-else :content="message.content" />
+        </template>
+       </div>
+       <div class="message-meta">
+        <span class="timestamp">
+         {{ new Date(message.timestamp).toLocaleTimeString() }}
+        </span>
+       </div>
       </div>
      </div>
     </div>
@@ -157,13 +165,20 @@ function handleKeydown(event: KeyboardEvent) {
 
   <footer class="footer">
    <div class="input-container">
-    <textarea
-     v-model="prompt"
-     placeholder="Tapez votre message..."
-     @keydown="handleKeydown"
-     :disabled="isLoading"
-     rows="2"
-    ></textarea>
+    <div class="input-wrapper">
+     <MarkdownToolbar
+      :textareaRef="textareaRef"
+      @format="handleFormat"
+     />
+     <textarea
+      ref="textareaRef"
+      v-model="prompt"
+      placeholder="Tapez votre message..."
+      @keydown="handleKeydown"
+      :disabled="isLoading"
+      rows="2"
+     ></textarea>
+    </div>
     <button
      class="send-btn"
      @click="sendPrompt"
@@ -333,11 +348,18 @@ function handleKeydown(event: KeyboardEvent) {
  margin: 0 auto;
 }
 
+.input-wrapper {
+ flex: 1;
+ display: flex;
+ flex-direction: column;
+}
+
 textarea {
  flex: 1;
  padding: var(--ui-spacing-md) var(--ui-spacing-base);
  border: 1px solid var(--ui-color-border-subtle);
- border-radius: var(--ui-radius-md);
+ border-top: none;
+ border-radius: 0 0 var(--ui-radius-md) var(--ui-radius-md);
  background-color: var(--ui-color-background-primary);
  color: var(--ui-color-text-primary);
  font-family: inherit;
