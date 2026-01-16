@@ -3,6 +3,11 @@ import {
   GetPopulation,
   GetWeather,
   AddNumbers,
+  Calculate,
+  GetCurrentDateTime,
+  RandomNumber,
+  TransformText,
+  CountText,
 } from "./tools/randomTools";
 
 // Doc found here : https://v03.api.js.langchain.com/classes/_langchain_openai.ChatOpenAI.html
@@ -18,4 +23,18 @@ export const llm = new ChatOpenAI({
   },
 });
 
-export const llmWithTools = llm.bindTools([AddNumbers, GetWeather, GetPopulation]);
+const tools = [
+  AddNumbers,
+  Calculate,
+  GetWeather,
+  GetPopulation,
+  GetCurrentDateTime,
+  RandomNumber,
+  TransformText,
+  CountText,
+];
+
+export const llmWithTools = llm.bindTools(tools);
+
+// Registry pour exécuter les tools par leur nom
+export const toolsRegistry = new Map(tools.map((t) => [t.name, t]));
