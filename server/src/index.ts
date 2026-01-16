@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { handleUserInput } from "./api/routes/userInput";
+import {
+  handleUserInput,
+  handleUserInputStream,
+  handleCancelStream,
+} from "./api/routes/userInput";
 
 const app = new Hono();
 
@@ -15,16 +19,23 @@ app.use(
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
     credentials: true,
-  })
+  }),
 );
 
+// Routes streaming
+app.post("/user-input/stream", handleUserInputStream);
+app.post("/user-input/cancel", handleCancelStream);
+
+// Route legacy (non-streaming)
 app.post("/user-input", handleUserInput);
 
 app.get("/", (c) => {
   return c.json({
     message: "LangChain API Server",
     routes: {
-      "POST /user-input": "Send a message to the LangChain agent",
+      "POST /user-input": "Send a message to the LangChain agent (legacy)",
+      "POST /user-input/stream": "Stream a message response via SSE",
+      "POST /user-input/cancel": "Cancel an active stream",
     },
   });
 });
@@ -32,7 +43,9 @@ app.get("/", (c) => {
 console.log(`Server starting on port ${PORT}...`);
 console.log(`Available routes:`);
 console.log(`  GET  / - Server info`);
-console.log(`  POST /user-input - Process user messages`);
+console.log(`  POST /user-input - Process user messages (legacy)`);
+console.log(`  POST /user-input/stream - Stream messages via SSE`);
+console.log(`  POST /user-input/cancel - Cancel active stream`);
 
 export default {
   port: PORT,
