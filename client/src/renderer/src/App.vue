@@ -223,6 +223,7 @@ function startResize(event: MouseEvent) {
    >
     <div class="resize-indicator"></div>
    </div>
+
    <div class="input-container">
     <div class="input-wrapper" :style="{ height: `${containerHeight}px` }">
      <MarkdownToolbar :textareaRef="textareaRef" @format="handleFormat" />
@@ -391,12 +392,13 @@ function startResize(event: MouseEvent) {
 }
 
 .footer {
- padding: 0 0 var(--ui-spacing-base); /* var(--ui-spacing-xl);*/
  background-color: var(--ui-color-background-secondary);
  border-top: 1px solid var(--ui-color-border-default);
 }
 
 .input-container {
+ padding: var(--ui-spacing-base) var(--ui-spacing-xl);
+
  display: flex;
  gap: var(--ui-gap-base);
  max-width: var(--ui-width-content-max);
@@ -414,7 +416,6 @@ function startResize(event: MouseEvent) {
  height: 8px;
  cursor: ns-resize;
  display: flex;
- margin-bottom: var(--ui-spacing-base);
  align-items: center;
  justify-content: center;
  background-color: var(--ui-color-background-secondary);
