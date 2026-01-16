@@ -12,7 +12,8 @@ export async function handleUserInput(c: Context): Promise<Response> {
    return c.json({ success: false, error: "Message is required" }, 400);
   }
 
-  const response = await llmWithTools.invoke(message) as AIMessageResponse;
+  const response = (await llmWithTools.invoke(message)) as AIMessageResponse;
+
   // await sendReply({
   //  reply: response.content,
   //  tool_calls: response.tool_calls || [],
