@@ -18,6 +18,8 @@ const messages = ref<Message[]>([]);
 const isLoading = ref(false);
 const activeRoute = ref("/chat");
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
+const containerHeight = ref(100); // Hauteur par défaut du container en pixels
+const isResizing = ref(false);
 let messageIdCounter = 0;
 
 const routes = [
@@ -26,11 +28,31 @@ const routes = [
  { path: "/status", label: "Status" },
 ];
 
+// Vérifier si l'utilisateur est proche du bas de la zone de scroll
+function isNearBottom(element: HTMLElement, threshold = 100): boolean {
+ return (
+  element.scrollHeight - element.scrollTop - element.clientHeight < threshold
+ );
+}
+
+// Scroller vers le bas seulement si l'utilisateur était déjà en bas
+async function scrollToBottomIfNeeded() {
+ await nextTick();
+ const main = document.querySelector(".main") as HTMLElement;
+ if (main && isNearBottom(main)) {
+  main.scrollTop = main.scrollHeight;
+ }
+}
+
 async function sendPrompt() {
  if (!prompt.value.trim() || isLoading.value) return;
 
  const userMessage = prompt.value;
  prompt.value = "";
+
+ // Vérifier si on doit scroller avant d'ajouter le message
+ const main = document.querySelector(".main") as HTMLElement;
+ const shouldScroll = main ? isNearBottom(main) : true;
 
  // Ajouter le message de l'utilisateur immédiatement
  messages.value.push({
@@ -51,6 +73,11 @@ async function sendPrompt() {
  messages.value.push(loaderMessage);
 
  isLoading.value = true;
+
+ // Scroller après l'ajout des messages si nécessaire
+ if (shouldScroll) {
+  await scrollToBottomIfNeeded();
+ }
 
  try {
   const response = await apiService.sendPrompt(userMessage);
@@ -84,11 +111,9 @@ async function sendPrompt() {
   }
  } finally {
   isLoading.value = false;
-  // Scroll vers le bas
-  await nextTick();
-  const main = document.querySelector(".main");
-  if (main) {
-   main.scrollTop = main.scrollHeight;
+  // Scroll vers le bas uniquement si l'utilisateur était déjà en bas
+  if (shouldScroll) {
+   await scrollToBottomIfNeeded();
   }
  }
 }
@@ -107,6 +132,33 @@ function handleKeydown(event: KeyboardEvent) {
 
 function handleFormat(newText: string) {
  prompt.value = newText;
+}
+
+// Gestion du resize du container
+function startResize(event: MouseEvent) {
+ event.preventDefault();
+ isResizing.value = true;
+ const startY = event.clientY;
+ const startHeight = containerHeight.value;
+
+ function onMouseMove(e: MouseEvent) {
+  const delta = startY - e.clientY;
+  const newHeight = Math.max(60, Math.min(500, startHeight + delta));
+  containerHeight.value = newHeight;
+ }
+
+ function onMouseUp() {
+  isResizing.value = false;
+  document.removeEventListener("mousemove", onMouseMove);
+  document.removeEventListener("mouseup", onMouseUp);
+  document.body.style.cursor = "";
+  document.body.style.userSelect = "";
+ }
+
+ document.addEventListener("mousemove", onMouseMove);
+ document.addEventListener("mouseup", onMouseUp);
+ document.body.style.cursor = "ns-resize";
+ document.body.style.userSelect = "none";
 }
 </script>
 
@@ -164,19 +216,22 @@ function handleFormat(newText: string) {
   </main>
 
   <footer class="footer">
+   <div
+    class="resize-handle"
+    @mousedown="startResize"
+    :class="{ resizing: isResizing }"
+   >
+    <div class="resize-indicator"></div>
+   </div>
    <div class="input-container">
-    <div class="input-wrapper">
-     <MarkdownToolbar
-      :textareaRef="textareaRef"
-      @format="handleFormat"
-     />
+    <div class="input-wrapper" :style="{ height: `${containerHeight}px` }">
+     <MarkdownToolbar :textareaRef="textareaRef" @format="handleFormat" />
      <textarea
       ref="textareaRef"
       v-model="prompt"
       placeholder="Tapez votre message..."
       @keydown="handleKeydown"
       :disabled="isLoading"
-      rows="2"
      ></textarea>
     </div>
     <button
@@ -336,7 +391,7 @@ function handleFormat(newText: string) {
 }
 
 .footer {
- padding: var(--ui-spacing-base) var(--ui-spacing-xl);
+ padding: 0 0 var(--ui-spacing-base); /* var(--ui-spacing-xl);*/
  background-color: var(--ui-color-background-secondary);
  border-top: 1px solid var(--ui-color-border-default);
 }
@@ -352,10 +407,43 @@ function handleFormat(newText: string) {
  flex: 1;
  display: flex;
  flex-direction: column;
+ position: relative;
+}
+
+.resize-handle {
+ height: 8px;
+ cursor: ns-resize;
+ display: flex;
+ margin-bottom: var(--ui-spacing-base);
+ align-items: center;
+ justify-content: center;
+ background-color: var(--ui-color-background-secondary);
+ border: 1px solid var(--ui-color-border-subtle);
+ border-bottom: none;
+ transition: background-color 0.15s ease;
+}
+
+.resize-handle:hover,
+.resize-handle.resizing {
+ background-color: var(--ui-color-background-tertiary);
+}
+
+.resize-indicator {
+ width: 40px;
+ height: 3px;
+ background-color: var(--ui-color-border-default);
+ border-radius: 2px;
+ transition: background-color 0.15s ease;
+}
+
+.resize-handle:hover .resize-indicator,
+.resize-handle.resizing .resize-indicator {
+ background-color: var(--ui-color-primary);
 }
 
 textarea {
  flex: 1;
+ min-height: 0;
  padding: var(--ui-spacing-md) var(--ui-spacing-base);
  border: 1px solid var(--ui-color-border-subtle);
  border-top: none;
@@ -365,6 +453,7 @@ textarea {
  font-family: inherit;
  font-size: var(--ui-font-size-base);
  resize: none;
+ overflow-y: auto;
 }
 
 textarea:focus {
