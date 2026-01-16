@@ -35,12 +35,12 @@ function isNearBottom(element: HTMLElement, threshold = 100): boolean {
  );
 }
 
-// Scroller vers le bas seulement si l'utilisateur était déjà en bas
-async function scrollToBottomIfNeeded() {
+// Scroller vers le bas
+async function scrollToBottom() {
  await nextTick();
- const main = document.querySelector(".main") as HTMLElement;
- if (main && isNearBottom(main)) {
-  main.scrollTop = main.scrollHeight;
+ const chatArea = document.querySelector(".chat-area") as HTMLElement;
+ if (chatArea) {
+  chatArea.scrollTop = chatArea.scrollHeight;
  }
 }
 
@@ -51,8 +51,8 @@ async function sendPrompt() {
  prompt.value = "";
 
  // Vérifier si on doit scroller avant d'ajouter le message
- const main = document.querySelector(".main") as HTMLElement;
- const shouldScroll = main ? isNearBottom(main) : true;
+ const chatArea = document.querySelector(".chat-area") as HTMLElement;
+ const shouldScroll = chatArea ? isNearBottom(chatArea) : true;
 
  // Ajouter le message de l'utilisateur immédiatement
  messages.value.push({
@@ -76,7 +76,7 @@ async function sendPrompt() {
 
  // Scroller après l'ajout des messages si nécessaire
  if (shouldScroll) {
-  await scrollToBottomIfNeeded();
+  await scrollToBottom();
  }
 
  try {
@@ -113,7 +113,7 @@ async function sendPrompt() {
   isLoading.value = false;
   // Scroll vers le bas uniquement si l'utilisateur était déjà en bas
   if (shouldScroll) {
-   await scrollToBottomIfNeeded();
+   await scrollToBottom();
   }
  }
 }
@@ -179,7 +179,7 @@ function startResize(event: MouseEvent) {
   </header>
 
   <main class="main">
-   <div>
+   <div class="chat-area">
     <div class="content-area">
      <div v-if="messages.length === 0" class="placeholder">
       <p>Envoyez un message pour commencer la conversation.</p>
@@ -298,10 +298,16 @@ function startResize(event: MouseEvent) {
 
 .main {
  flex: 1;
+ display: flex;
+ overflow: hidden;
+ position: relative;
+}
+
+.chat-area {
+ flex: 1;
  overflow-y: auto;
  overflow-x: hidden;
  padding: var(--ui-spacing-xl);
- position: relative;
 }
 
 .content-area {
