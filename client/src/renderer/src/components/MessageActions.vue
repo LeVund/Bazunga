@@ -62,12 +62,6 @@ const emit = defineEmits<{
 .message-actions {
   display: flex;
   gap: var(--ui-gap-xs, 4px);
-  opacity: 0;
-  transition: opacity var(--ui-transition-fast, 0.15s);
-}
-
-.message:hover .message-actions {
-  opacity: 1;
 }
 
 .message-actions.disabled {
@@ -79,13 +73,13 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: none;
   border-radius: var(--ui-radius-sm, 4px);
   background: transparent;
-  color: var(--ui-color-text-secondary, #888);
+  color: var(--ui-color-text-tertiary, #666);
   cursor: pointer;
   transition: all var(--ui-transition-fast, 0.15s);
 }

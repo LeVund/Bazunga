@@ -19,7 +19,7 @@ function getFinishReasonLabel(reason: GenerationMetrics["finishReason"]): string
     case "length":
       return "Limite atteinte";
     case "cancelled":
-      return "Annulé";
+      return "Interrompu";
     case "error":
       return "Erreur";
     default:

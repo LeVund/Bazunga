@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, nextTick } from "vue";
-import { Send, Square } from "lucide-vue-next";
+import { Send, Square, RefreshCw } from "lucide-vue-next";
 import MarkdownRenderer from "./components/MarkdownRenderer.vue";
 import SidePanel from "./components/SidePanel.vue";
 import MarkdownToolbar from "./components/MarkdownToolbar.vue";
@@ -20,8 +20,13 @@ interface Message {
  editContent?: string;
  metadata?: {
   metrics?: GenerationMetrics;
+  isDeletedPlaceholder?: boolean;
+  modelName?: string;
  };
 }
+
+// Nom du modèle courant (pourrait venir d'un state global plus tard)
+const currentModelName = ref("Agent");
 
 const prompt = ref("");
 const messages = ref<Message[]>([]);
@@ -31,6 +36,11 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const containerHeight = ref(100);
 const isResizing = ref(false);
 let messageIdCounter = 0;
+
+// Tracking pour les métriques de streaming
+let currentStreamingMessageId: number | null = null;
+let streamStartTime: number | null = null;
+let streamTokenCount = 0;
 
 const routes = [
  { path: "/chat", label: "Chat" },
@@ -74,10 +84,6 @@ async function sendPrompt() {
  const userMessage = prompt.value;
  prompt.value = "";
 
- // TODO : Claude utilises des querySelector au lieux de templateRef de Vue
- const chatArea = document.querySelector(".chat-area") as HTMLElement;
- const shouldScroll = chatArea ? isNearBottom(chatArea) : true;
-
  // Ajouter le message de l'utilisateur
  messages.value.push({
   id: messageIdCounter++,
@@ -99,9 +105,16 @@ async function sendPrompt() {
 
  isLoading.value = true;
 
- if (shouldScroll) {
+ // Scroll initial si nécessaire
+ const chatArea = document.querySelector(".chat-area") as HTMLElement;
+ if (chatArea && isNearBottom(chatArea)) {
   await scrollToBottom();
  }
+
+ // Initialiser le tracking
+ currentStreamingMessageId = assistantMessage.id;
+ streamStartTime = Date.now();
+ streamTokenCount = 0;
 
  try {
   await apiService.sendPromptStream(
@@ -120,7 +133,11 @@ async function sendPrompt() {
      const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
      if (idx !== -1) {
       messages.value[idx].content += content;
-      if (shouldScroll) {
+      // Estimer les tokens (approximation: ~4 caractères par token)
+      streamTokenCount += Math.ceil(content.length / 4);
+      // Vérifier le scroll à chaque chunk
+      const chatArea = document.querySelector(".chat-area") as HTMLElement;
+      if (chatArea && isNearBottom(chatArea)) {
        await scrollToBottom();
       }
      }
@@ -132,6 +149,9 @@ async function sendPrompt() {
       messages.value[idx].metadata = { metrics };
      }
      isLoading.value = false;
+     currentStreamingMessageId = null;
+     streamStartTime = null;
+     streamTokenCount = 0;
     },
     onError: (error) => {
      const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
@@ -141,6 +161,9 @@ async function sendPrompt() {
       messages.value[idx].isStreaming = false;
      }
      isLoading.value = false;
+     currentStreamingMessageId = null;
+     streamStartTime = null;
+     streamTokenCount = 0;
     },
    },
   );
@@ -158,8 +181,39 @@ async function sendPrompt() {
 
 // Annuler la génération
 async function cancelGeneration() {
+ // Calculer les métriques avant d'annuler
+ if (currentStreamingMessageId !== null && streamStartTime !== null) {
+  const durationMs = Date.now() - streamStartTime;
+  const tokensPerSecond =
+   durationMs > 0 ? (streamTokenCount / durationMs) * 1000 : 0;
+
+  const metrics: GenerationMetrics = {
+   tokensPerSecond,
+   completionTokens: streamTokenCount,
+   promptTokens: 0,
+   totalTokens: streamTokenCount,
+   durationMs,
+   finishReason: "cancelled",
+  };
+
+  // Mettre à jour le message avec les métriques
+  const idx = messages.value.findIndex(
+   (m) => m.id === currentStreamingMessageId,
+  );
+  if (idx !== -1) {
+   messages.value[idx].isStreaming = false;
+   messages.value[idx].isLoading = false;
+   messages.value[idx].metadata = { metrics };
+  }
+ }
+
  await apiService.cancelStream();
  isLoading.value = false;
+
+ // Reset du tracking
+ currentStreamingMessageId = null;
+ streamStartTime = null;
+ streamTokenCount = 0;
 }
 
 // Copier le contenu d'un message
@@ -206,7 +260,27 @@ function cancelEdit(messageId: number) {
 function deleteMessage(messageId: number) {
  const idx = messages.value.findIndex((m) => m.id === messageId);
  if (idx !== -1) {
-  messages.value.splice(idx, 1);
+  const deletedMessage = messages.value[idx];
+
+  // Si on supprime le dernier message assistant, ajouter un placeholder pour regénérer
+  if (
+   deletedMessage.type === "assistant" &&
+   idx === messages.value.length - 1 &&
+   idx > 0 &&
+   messages.value[idx - 1].type === "user"
+  ) {
+   // Remplacer par un message placeholder
+   messages.value[idx] = {
+    id: messageIdCounter++,
+    type: "assistant",
+    content: "",
+    timestamp: Date.now(),
+    isLoading: false,
+    metadata: { isDeletedPlaceholder: true },
+   };
+  } else {
+   messages.value.splice(idx, 1);
+  }
  }
 }
 
@@ -228,28 +302,49 @@ async function regenerateMessage(messageId: number) {
 
  const userMessage = messages.value[userMessageIndex];
 
- // Supprimer tous les messages apres le message utilisateur
- messages.value.splice(userMessageIndex + 1);
+ let assistantMessage: Message;
+
+ // Si c'est un placeholder, juste le remplacer, sinon supprimer tous les messages après
+ if (messages.value[messageIndex].metadata?.isDeletedPlaceholder) {
+  // Remplacer le placeholder par un nouveau message
+  assistantMessage = {
+   id: messageIdCounter++,
+   type: "assistant",
+   content: "",
+   timestamp: Date.now(),
+   isLoading: true,
+   isStreaming: true,
+  };
+  messages.value[messageIndex] = assistantMessage;
+ } else {
+  // Supprimer tous les messages apres le message utilisateur
+  messages.value.splice(userMessageIndex + 1);
+
+  // Créer un nouveau message assistant
+  assistantMessage = {
+   id: messageIdCounter++,
+   type: "assistant",
+   content: "",
+   timestamp: Date.now(),
+   isLoading: true,
+   isStreaming: true,
+  };
+  messages.value.push(assistantMessage);
+ }
 
  // Regenerer
- const chatArea = document.querySelector(".chat-area") as HTMLElement;
- const shouldScroll = chatArea ? isNearBottom(chatArea) : true;
-
- const assistantMessage: Message = {
-  id: messageIdCounter++,
-  type: "assistant",
-  content: "",
-  timestamp: Date.now(),
-  isLoading: true,
-  isStreaming: true,
- };
- messages.value.push(assistantMessage);
-
  isLoading.value = true;
 
- if (shouldScroll) {
+ // Scroll initial si nécessaire
+ const chatArea = document.querySelector(".chat-area") as HTMLElement;
+ if (chatArea && isNearBottom(chatArea)) {
   await scrollToBottom();
  }
+
+ // Initialiser le tracking
+ currentStreamingMessageId = assistantMessage.id;
+ streamStartTime = Date.now();
+ streamTokenCount = 0;
 
  try {
   await apiService.sendPromptStream(
@@ -268,7 +363,9 @@ async function regenerateMessage(messageId: number) {
      const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
      if (idx !== -1) {
       messages.value[idx].content += content;
-      if (shouldScroll) {
+      streamTokenCount += Math.ceil(content.length / 4);
+      const chatArea = document.querySelector(".chat-area") as HTMLElement;
+      if (chatArea && isNearBottom(chatArea)) {
        await scrollToBottom();
       }
      }
@@ -280,6 +377,9 @@ async function regenerateMessage(messageId: number) {
       messages.value[idx].metadata = { metrics };
      }
      isLoading.value = false;
+     currentStreamingMessageId = null;
+     streamStartTime = null;
+     streamTokenCount = 0;
     },
     onError: (error) => {
      const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
@@ -289,6 +389,9 @@ async function regenerateMessage(messageId: number) {
       messages.value[idx].isStreaming = false;
      }
      isLoading.value = false;
+     currentStreamingMessageId = null;
+     streamStartTime = null;
+     streamTokenCount = 0;
     },
    },
   );
@@ -301,6 +404,9 @@ async function regenerateMessage(messageId: number) {
    messages.value[idx].isStreaming = false;
   }
   isLoading.value = false;
+  currentStreamingMessageId = null;
+  streamStartTime = null;
+  streamTokenCount = 0;
  }
 }
 
@@ -309,11 +415,19 @@ async function continueMessage(messageId: number) {
  const message = messages.value.find((m) => m.id === messageId);
  if (!message || message.type !== "assistant") return;
 
- const chatArea = document.querySelector(".chat-area") as HTMLElement;
- const shouldScroll = chatArea ? isNearBottom(chatArea) : true;
-
  message.isStreaming = true;
  isLoading.value = true;
+
+ // Scroll initial si nécessaire
+ const chatArea = document.querySelector(".chat-area") as HTMLElement;
+ if (chatArea && isNearBottom(chatArea)) {
+  await scrollToBottom();
+ }
+
+ // Initialiser le tracking
+ currentStreamingMessageId = message.id;
+ streamStartTime = Date.now();
+ streamTokenCount = 0;
 
  try {
   await apiService.sendPromptStream(
@@ -324,7 +438,9 @@ async function continueMessage(messageId: number) {
    {
     onContent: async (content) => {
      message.content += content;
-     if (shouldScroll) {
+     streamTokenCount += Math.ceil(content.length / 4);
+     const chatArea = document.querySelector(".chat-area") as HTMLElement;
+     if (chatArea && isNearBottom(chatArea)) {
       await scrollToBottom();
      }
     },
@@ -332,11 +448,17 @@ async function continueMessage(messageId: number) {
      message.isStreaming = false;
      message.metadata = { metrics };
      isLoading.value = false;
+     currentStreamingMessageId = null;
+     streamStartTime = null;
+     streamTokenCount = 0;
     },
     onError: (error) => {
      message.content += `\n\n**Erreur**: ${error}`;
      message.isStreaming = false;
      isLoading.value = false;
+     currentStreamingMessageId = null;
+     streamStartTime = null;
+     streamTokenCount = 0;
     },
    },
   );
@@ -344,6 +466,9 @@ async function continueMessage(messageId: number) {
   message.content += `\n\n**Erreur**: ${error instanceof Error ? error.message : "Erreur inconnue"}`;
   message.isStreaming = false;
   isLoading.value = false;
+  currentStreamingMessageId = null;
+  streamStartTime = null;
+  streamTokenCount = 0;
  }
 }
 
@@ -422,6 +547,18 @@ function startResize(event: MouseEvent) {
        :key="message.id"
        :class="['message', message.type]"
       >
+       <!-- En-tête du message: nom + actions -->
+       <div class="message-header">
+        <span class="message-author">
+         {{
+          message.type === "user"
+           ? "Vous"
+           : message.metadata?.modelName || currentModelName
+         }}
+        </span>
+       </div>
+
+       <!-- Corps du message -->
        <div class="message-content">
         <div v-if="message.isLoading" class="loading">
          <div class="spinner"></div>
@@ -446,6 +583,18 @@ function startResize(event: MouseEvent) {
          <div v-if="message.type === 'user'" class="user-text">
           {{ message.content }}
          </div>
+         <template v-else-if="message.metadata?.isDeletedPlaceholder">
+          <div class="deleted-placeholder">
+           <button
+            class="regenerate-placeholder-btn"
+            @click="regenerateMessage(message.id)"
+            :disabled="isLoading"
+           >
+            <RefreshCw :size="16" />
+            Regenerer le message
+           </button>
+          </div>
+         </template>
          <MarkdownRenderer v-else :content="message.content" />
          <div v-if="message.isStreaming" class="streaming-indicator">
           <div class="streaming-dot"></div>
@@ -453,8 +602,12 @@ function startResize(event: MouseEvent) {
         </template>
        </div>
 
-       <div class="message-footer">
-        <div class="message-meta">
+       <!-- Pied du message: timestamp + métriques -->
+       <div
+        class="message-footer"
+        v-if="!message.metadata?.isDeletedPlaceholder"
+       >
+        <div class="meta-data">
          <span class="timestamp">
           {{ new Date(message.timestamp).toLocaleTimeString() }}
          </span>
@@ -463,8 +616,13 @@ function startResize(event: MouseEvent) {
           :metrics="message.metadata.metrics"
          />
         </div>
+
         <MessageActions
-         v-if="!message.isLoading && !message.isEditing"
+         v-if="
+          !message.isLoading &&
+          !message.isEditing &&
+          !message.metadata?.isDeletedPlaceholder
+         "
          :message-type="message.type"
          :is-streaming="message.isStreaming"
          :disabled="isLoading"
@@ -592,67 +750,83 @@ function startResize(event: MouseEvent) {
 .messages-container {
  display: flex;
  flex-direction: column;
- gap: var(--ui-gap-base);
+ gap: var(--ui-gap-lg, 24px);
 }
 
 .message {
  display: flex;
  flex-direction: column;
- max-width: 80%;
+ width: 100%;
  animation: var(--ui-animation-slide-in);
 }
 
-.message.user {
- align-self: flex-end;
+/* En-tête du message */
+.message-header {
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ margin-bottom: var(--ui-spacing-xs, 4px);
 }
 
-.message.assistant {
- align-self: flex-start;
+.message-author {
+ font-size: var(--ui-font-size-sm, 13px);
+ font-weight: var(--ui-font-weight-medium, 500);
+ color: var(--ui-color-text-secondary, #888);
 }
 
+/* Actions visibles au hover du message */
+.message :deep(.message-actions) {
+ opacity: 0;
+ transition: opacity var(--ui-transition-fast, 0.15s);
+}
+
+.message:hover :deep(.message-actions) {
+ opacity: 1;
+}
+
+/* Corps du message */
 .message-content {
- background-color: var(--ui-color-background-secondary);
- border-radius: var(--ui-radius-lg);
- padding: var(--ui-spacing-base) var(--ui-spacing-lg);
+ padding: var(--ui-spacing-base, 12px) var(--ui-spacing-lg, 16px);
+ border-radius: var(--ui-radius-md, 8px);
  word-wrap: break-word;
  position: relative;
+ transition: background-color var(--ui-transition-fast, 0.15s);
 }
 
 .message.user .message-content {
- background-color: var(--ui-color-primary);
- color: var(--ui-color-text-strong);
+ background-color: transparent;
+ color: var(--ui-color-text-primary);
+}
+
+.message.user .message-content:hover {
+ background-color: var(--ui-color-background-secondary);
+}
+
+.message.assistant .message-content .markdown-body * {
+ color: var(--ui-color-agent);
 }
 
 .user-text {
  white-space: pre-wrap;
- line-height: var(--ui-line-height-tight);
+ line-height: var(--ui-line-height-base, 1.6);
 }
 
-.message.assistant .message-content {
- background-color: var(--ui-color-background-tertiary);
-}
-
+/* Pied du message */
 .message-footer {
  display: flex;
+ align-items: center;
  justify-content: space-between;
- align-items: center;
- padding: var(--ui-spacing-xs) var(--ui-spacing-sm);
- gap: var(--ui-gap-base);
+ margin-top: var(--ui-spacing-xs, 4px);
+ padding: 0 var(--ui-spacing-lg, 16px);
 }
 
-.message.user .message-footer {
- flex-direction: row-reverse;
-}
-
-.message-meta {
+.meta-data {
  display: flex;
- align-items: center;
- gap: var(--ui-gap-md);
- font-size: var(--ui-font-size-xs);
+ gap: var(--ui-gap-md, 12px);
 }
-
 .timestamp {
- color: var(--ui-color-text-tertiary);
+ font-size: var(--ui-font-size-xs, 11px);
+ color: var(--ui-color-text-tertiary, #666);
 }
 
 .loading {
@@ -698,14 +872,20 @@ function startResize(event: MouseEvent) {
 .edit-textarea {
  width: 100%;
  min-height: 80px;
- padding: var(--ui-spacing-sm);
- border: 1px solid var(--ui-color-border-default);
- border-radius: var(--ui-radius-sm);
- background-color: var(--ui-color-background-primary);
+ padding: var(--ui-spacing-base, 12px);
+ border: none;
+ border-radius: var(--ui-radius-md, 8px);
+ background-color: color-mix(in srgb, var(--ui-color-primary) 15%, transparent);
  color: var(--ui-color-text-primary);
  font-family: inherit;
  font-size: var(--ui-font-size-base);
+ line-height: var(--ui-line-height-base, 1.6);
  resize: vertical;
+ outline: none;
+}
+
+.edit-textarea:focus {
+ background-color: color-mix(in srgb, var(--ui-color-primary) 20%, transparent);
 }
 
 .edit-actions {
@@ -850,5 +1030,37 @@ textarea:disabled {
 
 .send-btn.stop:hover {
  background-color: #b91c1c;
+}
+
+.deleted-placeholder {
+ display: flex;
+ justify-content: center;
+ align-items: center;
+ padding: var(--ui-spacing-lg) var(--ui-spacing-base);
+}
+
+.regenerate-placeholder-btn {
+ display: flex;
+ align-items: center;
+ gap: var(--ui-gap-sm);
+ padding: var(--ui-spacing-sm) var(--ui-spacing-base);
+ border: 1px dashed var(--ui-color-border-default);
+ border-radius: var(--ui-radius-md);
+ background-color: transparent;
+ color: var(--ui-color-text-secondary);
+ font-size: var(--ui-font-size-sm);
+ cursor: pointer;
+ transition: all var(--ui-transition-fast);
+}
+
+.regenerate-placeholder-btn:hover:not(:disabled) {
+ background-color: var(--ui-color-background-elevated);
+ border-color: var(--ui-color-primary);
+ color: var(--ui-color-primary);
+}
+
+.regenerate-placeholder-btn:disabled {
+ opacity: 0.5;
+ cursor: not-allowed;
 }
 </style>
