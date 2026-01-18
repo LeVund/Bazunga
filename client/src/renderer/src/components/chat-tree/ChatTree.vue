@@ -2,6 +2,7 @@
 import { ref, onMounted } from "vue";
 import { Plus, FolderPlus, MessageSquarePlus } from "lucide-vue-next";
 import TreeItem from "./TreeItem.vue";
+import CreateInput from "./CreateInput.vue";
 import { useChatStorage } from "../../composables/useChatStorage";
 
 const emit = defineEmits<{
@@ -29,23 +30,31 @@ const {
 
 const showNewMenu = ref(false);
 const isDragOverRoot = ref(false);
+const creatingItem = ref<"folder" | "chat" | null>(null);
 
-async function handleCreateFolder() {
+function handleCreateFolder() {
   showNewMenu.value = false;
-  const name = prompt("Nom du dossier:");
-  if (name?.trim()) {
-    await createFolder(name.trim());
-  }
+  creatingItem.value = "folder";
 }
 
-async function handleCreateChat() {
+function handleCreateChat() {
   showNewMenu.value = false;
-  const title = prompt("Titre du chat:");
-  if (title?.trim()) {
-    const chat = await createChat(title.trim());
+  creatingItem.value = "chat";
+}
+
+async function handleSaveNewItem(name: string) {
+  if (creatingItem.value === "folder") {
+    await createFolder(name);
+  } else if (creatingItem.value === "chat") {
+    const chat = await createChat(name);
     await selectChat(chat.id);
     emit("newChatCreated", chat.id);
   }
+  creatingItem.value = null;
+}
+
+function handleCancelNewItem() {
+  creatingItem.value = null;
 }
 
 async function handleSelectChat(chatId: string) {
@@ -166,7 +175,7 @@ onMounted(() => {
         <span>Chargement...</span>
       </div>
 
-      <div v-else-if="tree.length === 0" class="empty-state">
+      <div v-else-if="tree.length === 0 && !creatingItem" class="empty-state">
         <p>Aucune conversation</p>
         <button class="create-btn" @click="handleCreateChat">
           <MessageSquarePlus :size="16" />
@@ -175,6 +184,12 @@ onMounted(() => {
       </div>
 
       <template v-else>
+        <CreateInput
+          v-if="creatingItem"
+          :type="creatingItem"
+          @save="handleSaveNewItem"
+          @cancel="handleCancelNewItem"
+        />
         <TreeItem
           v-for="node in tree"
           :key="node.type + '-' + (node.data as any).id"

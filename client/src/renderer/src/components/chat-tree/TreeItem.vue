@@ -38,8 +38,9 @@ const emit = defineEmits<{
 }>();
 
 const isRenaming = ref(false);
-const contextMenu = ref<{ x: number; y: number } | null>(null);
+const contextMenu = ref<DOMRect | null>(null);
 const isDragOver = ref(false);
+const containerRef = ref<HTMLDivElement | null>(null);
 
 const isFolder = computed(() => props.node.type === "folder");
 const folder = computed(() => (isFolder.value ? (props.node.data as FolderType) : null));
@@ -69,13 +70,40 @@ function handleDoubleClick(event: MouseEvent) {
 function handleContextMenu(event: MouseEvent) {
   event.preventDefault();
   event.stopPropagation();
-  contextMenu.value = { x: event.clientX, y: event.clientY };
+
+  if (!containerRef.value) return;
+
+  const containerRect = containerRef.value.getBoundingClientRect();
+
+  // Create a DOMRect at the click position
+  const clickRect = new DOMRect(
+    event.clientX - containerRect.left,
+    event.clientY - containerRect.top,
+    0,
+    0
+  );
+
+  contextMenu.value = clickRect;
 }
 
 function handleMoreClick(event: MouseEvent) {
   event.stopPropagation();
-  const rect = (event.target as HTMLElement).getBoundingClientRect();
-  contextMenu.value = { x: rect.left, y: rect.bottom + 4 };
+
+  if (!containerRef.value) return;
+
+  const button = (event.currentTarget as HTMLElement);
+  const buttonRect = button.getBoundingClientRect();
+  const containerRect = containerRef.value.getBoundingClientRect();
+
+  // Create a DOMRect relative to the container
+  const relativeRect = new DOMRect(
+    buttonRect.left - containerRect.left,
+    buttonRect.top - containerRect.top,
+    buttonRect.width,
+    buttonRect.height
+  );
+
+  contextMenu.value = relativeRect;
 }
 
 function handleRename(newName: string) {
@@ -186,7 +214,7 @@ function forwardMoveItem(
 </script>
 
 <template>
-  <div class="tree-item-container">
+  <div ref="containerRef" class="tree-item-container">
     <div
       :class="[
         'tree-item',
@@ -262,9 +290,9 @@ function forwardMoveItem(
     <!-- Context menu -->
     <ContextMenu
       v-if="contextMenu"
-      :x="contextMenu.x"
-      :y="contextMenu.y"
+      :anchor-rect="contextMenu"
       :show-duplicate="!isFolder"
+      align="right"
       @rename="handleContextAction('rename')"
       @duplicate="handleContextAction('duplicate')"
       @delete="handleContextAction('delete')"
@@ -369,9 +397,5 @@ function forwardMoveItem(
 
 .tree-item.selected .more-btn:hover {
   background-color: rgba(255, 255, 255, 0.1);
-}
-
-.children {
-  /* No additional styles needed */
 }
 </style>

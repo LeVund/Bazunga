@@ -1,3 +1,6 @@
+# storage
+server/data
+
 # Dependencies
 node_modules/
 jspm_packages/

@@ -57,16 +57,14 @@ let streamTokenCount = 0;
 
 // Load stored messages when chat changes
 watch(storedMessages, (newMessages) => {
-  if (newMessages.length > 0) {
-    messages.value = newMessages.map((m: StoredMessage) => ({
-      id: messageIdCounter++,
-      type: m.type,
-      content: m.content,
-      timestamp: m.timestamp,
-      storedId: m.id,
-      metadata: m.metadata,
-    }));
-  }
+  messages.value = newMessages.map((m: StoredMessage) => ({
+    id: messageIdCounter++,
+    type: m.type,
+    content: m.content,
+    timestamp: m.timestamp,
+    storedId: m.id,
+    metadata: m.metadata,
+  }));
 }, { immediate: true });
 
 // Initialize

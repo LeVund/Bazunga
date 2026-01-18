@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { Edit3, Copy, Trash2 } from "lucide-vue-next";
 
 interface Props {
-  x: number;
-  y: number;
+  anchorRect: DOMRect;
   showDuplicate?: boolean;
+  align?: "left" | "right";
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showDuplicate: true,
+  align: "right",
 });
 
 const emit = defineEmits<{
@@ -21,6 +22,24 @@ const emit = defineEmits<{
 
 const menuRef = ref<HTMLDivElement | null>(null);
 
+const menuStyle = computed(() => {
+  const rect = props.anchorRect;
+
+  if (props.align === "right") {
+    // Align right edge of menu with right edge of anchor
+    return {
+      top: `${rect.bottom}px`,
+      right: `0px`,
+    };
+  } else {
+    // Align left edge of menu with left edge of anchor
+    return {
+      top: `${rect.bottom}px`,
+      left: `0px`,
+    };
+  }
+});
+
 function handleClickOutside(event: MouseEvent) {
   if (menuRef.value && !menuRef.value.contains(event.target as Node)) {
     emit("close");
@@ -28,13 +47,22 @@ function handleClickOutside(event: MouseEvent) {
 }
 
 function handleAction(action: "rename" | "duplicate" | "delete") {
-  emit(action);
+  if (action === "rename") {
+    emit("rename");
+  } else if (action === "duplicate") {
+    emit("duplicate");
+  } else if (action === "delete") {
+    emit("delete");
+  }
   emit("close");
 }
 
 onMounted(() => {
-  document.addEventListener("mousedown", handleClickOutside);
-  document.addEventListener("contextmenu", handleClickOutside);
+  // Delay adding event listeners to avoid immediate trigger
+  setTimeout(() => {
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("contextmenu", handleClickOutside);
+  }, 0);
 });
 
 onUnmounted(() => {
@@ -47,7 +75,7 @@ onUnmounted(() => {
   <div
     ref="menuRef"
     class="context-menu"
-    :style="{ left: `${props.x}px`, top: `${props.y}px` }"
+    :style="menuStyle"
   >
     <button class="menu-item" @click="handleAction('rename')">
       <Edit3 :size="14" />
@@ -71,7 +99,7 @@ onUnmounted(() => {
 
 <style scoped>
 .context-menu {
-  position: fixed;
+  position: absolute;
   z-index: 1000;
   min-width: 160px;
   background-color: var(--ui-color-background-elevated);
