@@ -23,6 +23,7 @@
     "@langchain/openai": "^1.2.2",
     "hono": "^4.11.4",
     "langchain": "^1.2.8",
+    "lowdb": "^7.0.1",
     "minimist": "^1.2.8",
     "ora": "^9.0.0"
   }
