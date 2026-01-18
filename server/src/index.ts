@@ -5,16 +5,37 @@ import {
   handleUserInputStream,
   handleCancelStream,
 } from "./api/routes/userInput";
+import {
+  handleGetTree,
+  handleCreateFolder,
+  handleUpdateFolder,
+  handleDeleteFolder,
+  handleToggleFolderExpand,
+  handleGetChats,
+  handleGetChatMessages,
+  handleCreateChat,
+  handleUpdateChat,
+  handleDeleteChat,
+  handleMoveChat,
+  handleDuplicateChat,
+  handleAddMessage,
+} from "./api/routes/storage";
+import { initDatabase } from "./services/database";
 
 const app = new Hono();
 
 const PORT = process.env.SERVER_PORT || 8080;
 
+// Initialize database
+initDatabase().then(() => {
+  console.log("Database initialized");
+});
+
 app.use(
   "*",
   cors({
     origin: "*",
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
@@ -29,6 +50,25 @@ app.post("/user-input/cancel", handleCancelStream);
 // Route legacy (non-streaming)
 app.post("/user-input", handleUserInput);
 
+// Storage routes - Folders
+app.get("/folders/tree", handleGetTree);
+app.post("/folders", handleCreateFolder);
+app.put("/folders/:id", handleUpdateFolder);
+app.delete("/folders/:id", handleDeleteFolder);
+app.patch("/folders/:id/toggle", handleToggleFolderExpand);
+
+// Storage routes - Chats
+app.get("/chats", handleGetChats);
+app.get("/chats/:id/messages", handleGetChatMessages);
+app.post("/chats", handleCreateChat);
+app.put("/chats/:id", handleUpdateChat);
+app.delete("/chats/:id", handleDeleteChat);
+app.patch("/chats/:id/move", handleMoveChat);
+app.post("/chats/:id/duplicate", handleDuplicateChat);
+
+// Storage routes - Messages
+app.post("/chats/:chatId/messages", handleAddMessage);
+
 app.get("/", (c) => {
   return c.json({
     message: "LangChain API Server",
@@ -36,6 +76,19 @@ app.get("/", (c) => {
       "POST /user-input": "Send a message to the LangChain agent (legacy)",
       "POST /user-input/stream": "Stream a message response via SSE",
       "POST /user-input/cancel": "Cancel an active stream",
+      "GET /folders/tree": "Get folder/chat tree",
+      "POST /folders": "Create folder",
+      "PUT /folders/:id": "Update folder",
+      "DELETE /folders/:id": "Delete folder (cascade)",
+      "PATCH /folders/:id/toggle": "Toggle folder expand",
+      "GET /chats": "Get all chats",
+      "GET /chats/:id/messages": "Get chat messages",
+      "POST /chats": "Create chat",
+      "PUT /chats/:id": "Update chat",
+      "DELETE /chats/:id": "Delete chat",
+      "PATCH /chats/:id/move": "Move chat to folder",
+      "POST /chats/:id/duplicate": "Duplicate chat",
+      "POST /chats/:chatId/messages": "Add message to chat",
     },
   });
 });
@@ -46,6 +99,7 @@ console.log(`  GET  / - Server info`);
 console.log(`  POST /user-input - Process user messages (legacy)`);
 console.log(`  POST /user-input/stream - Stream messages via SSE`);
 console.log(`  POST /user-input/cancel - Cancel active stream`);
+console.log(`  Storage API - /folders/*, /chats/*`);
 
 export default {
   port: PORT,

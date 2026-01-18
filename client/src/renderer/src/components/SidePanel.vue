@@ -1,36 +1,47 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { ChevronLeft, ChevronRight } from "lucide-vue-next";
+import ChatTree from "./chat-tree/ChatTree.vue";
 
-const isOpen = ref(false);
+const emit = defineEmits<{
+  chatSelected: [chatId: string];
+  newChatCreated: [chatId: string];
+}>();
+
+const isOpen = ref(true);
 
 function togglePanel() {
- isOpen.value = !isOpen.value;
+  isOpen.value = !isOpen.value;
+}
+
+function handleChatSelected(chatId: string) {
+  emit("chatSelected", chatId);
+}
+
+function handleNewChatCreated(chatId: string) {
+  emit("newChatCreated", chatId);
 }
 </script>
 
 <template>
- <div :class="['side-panel', { open: isOpen }]">
-  <button
-   class="toggle-button"
-   @click="togglePanel"
-   :aria-label="isOpen ? 'Fermer le panneau' : 'Ouvrir le panneau'"
-   :aria-expanded="isOpen"
-  >
-   <ChevronLeft v-if="isOpen" :size="20" />
-   <ChevronRight v-else :size="20" />
-  </button>
+  <div :class="['side-panel', { open: isOpen }]">
+    <button
+      class="toggle-button"
+      @click="togglePanel"
+      :aria-label="isOpen ? 'Fermer le panneau' : 'Ouvrir le panneau'"
+      :aria-expanded="isOpen"
+    >
+      <ChevronLeft v-if="isOpen" :size="20" />
+      <ChevronRight v-else :size="20" />
+    </button>
 
-  <div class="panel-content">
-   <div class="panel-header">
-    <h2>Panneau latéral</h2>
-   </div>
-   <div class="panel-body">
-    <p>Contenu du panneau</p>
-    <p>Vous pouvez ajouter n'importe quel contenu ici.</p>
-   </div>
+    <div class="panel-content">
+      <ChatTree
+        @chat-selected="handleChatSelected"
+        @new-chat-created="handleNewChatCreated"
+      />
+    </div>
   </div>
- </div>
 </template>
 
 <style scoped>
@@ -89,56 +100,9 @@ function togglePanel() {
 }
 
 .panel-content {
- width: 100%;
- display: flex;
- flex-direction: column;
- overflow: hidden;
-}
-
-.panel-header {
- padding: var(--ui-spacing-lg) var(--ui-spacing-lg) var(--ui-spacing-base);
- border-bottom: 1px solid var(--ui-color-border-default);
-}
-
-.panel-header h2 {
- margin: 0;
- font-size: var(--ui-font-size-md);
- color: var(--ui-color-text-strong);
- font-weight: var(--ui-font-weight-semibold);
-}
-
-.panel-body {
- padding: var(--ui-spacing-lg);
- overflow-y: auto;
- flex: 1;
- color: var(--ui-color-text-primary);
-}
-
-.panel-body p {
- margin: 0 0 var(--ui-margin-base) 0;
- line-height: var(--ui-line-height-base);
-}
-
-.panel-body p:last-child {
- margin-bottom: 0;
-}
-
-/* Scrollbar styling */
-.panel-body::-webkit-scrollbar {
- width: var(--ui-width-scrollbar);
-}
-
-.panel-body::-webkit-scrollbar-track {
- background: var(--ui-color-scrollbar-track);
- border-radius: var(--ui-radius-sm);
-}
-
-.panel-body::-webkit-scrollbar-thumb {
- background: var(--ui-color-scrollbar-thumb);
- border-radius: var(--ui-radius-sm);
-}
-
-.panel-body::-webkit-scrollbar-thumb:hover {
- background: var(--ui-color-scrollbar-thumb-hover);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 </style>

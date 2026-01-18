@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick } from "vue";
+import { ref, nextTick, watch, onMounted } from "vue";
 import { Send, Square, RefreshCw } from "lucide-vue-next";
 import MarkdownRenderer from "./components/MarkdownRenderer.vue";
 import SidePanel from "./components/SidePanel.vue";
@@ -7,23 +7,36 @@ import MarkdownToolbar from "./components/MarkdownToolbar.vue";
 import MessageActions from "./components/MessageActions.vue";
 import MessageMetrics from "./components/MessageMetrics.vue";
 import { apiService } from "./services/api";
-import type { GenerationMetrics } from "@core/types";
+import { useChatStorage } from "./composables/useChatStorage";
+import type { GenerationMetrics, StoredMessage } from "@core/types";
 
 interface Message {
- id: number;
- type: "user" | "assistant";
- content: string;
- timestamp: number;
- isLoading?: boolean;
- isStreaming?: boolean;
- isEditing?: boolean;
- editContent?: string;
- metadata?: {
-  metrics?: GenerationMetrics;
-  isDeletedPlaceholder?: boolean;
-  modelName?: string;
- };
+  id: number;
+  type: "user" | "assistant";
+  content: string;
+  timestamp: number;
+  isLoading?: boolean;
+  isStreaming?: boolean;
+  isEditing?: boolean;
+  editContent?: string;
+  storedId?: string; // Reference to stored message ID
+  metadata?: {
+    metrics?: GenerationMetrics;
+    isDeletedPlaceholder?: boolean;
+    modelName?: string;
+  };
 }
+
+// Chat storage
+const {
+  currentChatId,
+  currentMessages: storedMessages,
+  loadTree,
+  selectChat,
+  createChat,
+  addMessage: addStoredMessage,
+  clearCurrentChat,
+} = useChatStorage();
 
 // Nom du modèle courant (pourrait venir d'un state global plus tard)
 const currentModelName = ref("Agent");
@@ -41,6 +54,25 @@ let messageIdCounter = 0;
 let currentStreamingMessageId: number | null = null;
 let streamStartTime: number | null = null;
 let streamTokenCount = 0;
+
+// Load stored messages when chat changes
+watch(storedMessages, (newMessages) => {
+  if (newMessages.length > 0) {
+    messages.value = newMessages.map((m: StoredMessage) => ({
+      id: messageIdCounter++,
+      type: m.type,
+      content: m.content,
+      timestamp: m.timestamp,
+      storedId: m.id,
+      metadata: m.metadata,
+    }));
+  }
+}, { immediate: true });
+
+// Initialize
+onMounted(() => {
+  loadTree();
+});
 
 const routes = [
  { path: "/chat", label: "Chat" },
@@ -79,104 +111,128 @@ function buildConversationHistory(): Array<{
 
 // Envoyer un message avec streaming
 async function sendPrompt() {
- if (!prompt.value.trim() || isLoading.value) return;
+  if (!prompt.value.trim() || isLoading.value) return;
 
- const userMessage = prompt.value;
- prompt.value = "";
+  const userMessage = prompt.value;
+  prompt.value = "";
 
- // Ajouter le message de l'utilisateur
- messages.value.push({
-  id: messageIdCounter++,
-  type: "user",
-  content: userMessage,
-  timestamp: Date.now(),
- });
-
- // Ajouter un message assistant vide pour le streaming
- const assistantMessage: Message = {
-  id: messageIdCounter++,
-  type: "assistant",
-  content: "",
-  timestamp: Date.now(),
-  isLoading: true,
-  isStreaming: true,
- };
- messages.value.push(assistantMessage);
-
- isLoading.value = true;
-
- // Scroll initial si nécessaire
- const chatArea = document.querySelector(".chat-area") as HTMLElement;
- if (chatArea && isNearBottom(chatArea)) {
-  await scrollToBottom();
- }
-
- // Initialiser le tracking
- currentStreamingMessageId = assistantMessage.id;
- streamStartTime = Date.now();
- streamTokenCount = 0;
-
- try {
-  await apiService.sendPromptStream(
-   {
-    message: userMessage,
-    conversationHistory: buildConversationHistory().slice(0, -1), // Exclure le message vide
-   },
-   {
-    onStart: () => {
-     const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
-     if (idx !== -1) {
-      messages.value[idx].isLoading = false;
-     }
-    },
-    onContent: async (content) => {
-     const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
-     if (idx !== -1) {
-      messages.value[idx].content += content;
-      // Estimer les tokens (approximation: ~4 caractères par token)
-      streamTokenCount += Math.ceil(content.length / 4);
-      // Vérifier le scroll à chaque chunk
-      const chatArea = document.querySelector(".chat-area") as HTMLElement;
-      if (chatArea && isNearBottom(chatArea)) {
-       await scrollToBottom();
-      }
-     }
-    },
-    onEnd: (metrics) => {
-     const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
-     if (idx !== -1) {
-      messages.value[idx].isStreaming = false;
-      messages.value[idx].metadata = { metrics };
-     }
-     isLoading.value = false;
-     currentStreamingMessageId = null;
-     streamStartTime = null;
-     streamTokenCount = 0;
-    },
-    onError: (error) => {
-     const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
-     if (idx !== -1) {
-      messages.value[idx].content = `**Erreur**: ${error}`;
-      messages.value[idx].isLoading = false;
-      messages.value[idx].isStreaming = false;
-     }
-     isLoading.value = false;
-     currentStreamingMessageId = null;
-     streamStartTime = null;
-     streamTokenCount = 0;
-    },
-   },
-  );
- } catch (error) {
-  const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
-  if (idx !== -1) {
-   messages.value[idx].content =
-    `**Erreur**: ${error instanceof Error ? error.message : "Erreur inconnue"}`;
-   messages.value[idx].isLoading = false;
-   messages.value[idx].isStreaming = false;
+  // Create chat if needed
+  let chatId = currentChatId.value;
+  if (!chatId) {
+    const title = userMessage.substring(0, 50) + (userMessage.length > 50 ? "..." : "");
+    const chat = await createChat(title);
+    chatId = chat.id;
+    await selectChat(chatId);
   }
-  isLoading.value = false;
- }
+
+  const userTimestamp = Date.now();
+
+  // Ajouter le message de l'utilisateur
+  messages.value.push({
+    id: messageIdCounter++,
+    type: "user",
+    content: userMessage,
+    timestamp: userTimestamp,
+  });
+
+  // Save user message to storage
+  await addStoredMessage({
+    type: "user",
+    content: userMessage,
+    timestamp: userTimestamp,
+  });
+
+  // Ajouter un message assistant vide pour le streaming
+  const assistantMessage: Message = {
+    id: messageIdCounter++,
+    type: "assistant",
+    content: "",
+    timestamp: Date.now(),
+    isLoading: true,
+    isStreaming: true,
+  };
+  messages.value.push(assistantMessage);
+
+  isLoading.value = true;
+
+  // Scroll initial si nécessaire
+  const chatArea = document.querySelector(".chat-area") as HTMLElement;
+  if (chatArea && isNearBottom(chatArea)) {
+    await scrollToBottom();
+  }
+
+  // Initialiser le tracking
+  currentStreamingMessageId = assistantMessage.id;
+  streamStartTime = Date.now();
+  streamTokenCount = 0;
+
+  try {
+    await apiService.sendPromptStream(
+      {
+        message: userMessage,
+        conversationHistory: buildConversationHistory().slice(0, -1),
+      },
+      {
+        onStart: () => {
+          const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
+          if (idx !== -1) {
+            messages.value[idx].isLoading = false;
+          }
+        },
+        onContent: async (content) => {
+          const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
+          if (idx !== -1) {
+            messages.value[idx].content += content;
+            streamTokenCount += Math.ceil(content.length / 4);
+            const chatArea = document.querySelector(".chat-area") as HTMLElement;
+            if (chatArea && isNearBottom(chatArea)) {
+              await scrollToBottom();
+            }
+          }
+        },
+        onEnd: async (metrics) => {
+          const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
+          if (idx !== -1) {
+            messages.value[idx].isStreaming = false;
+            messages.value[idx].metadata = { metrics };
+
+            // Save assistant message to storage
+            await addStoredMessage({
+              type: "assistant",
+              content: messages.value[idx].content,
+              timestamp: messages.value[idx].timestamp,
+              metadata: { metrics },
+            });
+          }
+          isLoading.value = false;
+          currentStreamingMessageId = null;
+          streamStartTime = null;
+          streamTokenCount = 0;
+        },
+        onError: (error) => {
+          const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
+          if (idx !== -1) {
+            messages.value[idx].content = `**Erreur**: ${error}`;
+            messages.value[idx].isLoading = false;
+            messages.value[idx].isStreaming = false;
+          }
+          isLoading.value = false;
+          currentStreamingMessageId = null;
+          streamStartTime = null;
+          streamTokenCount = 0;
+        },
+      },
+    );
+  } catch (error) {
+    const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
+    if (idx !== -1) {
+      messages.value[idx].content =
+        `**Erreur**: ${error instanceof Error ? error.message : "Erreur inconnue"}`;
+      messages.value[idx].isLoading = false;
+      messages.value[idx].isStreaming = false;
+    }
+    isLoading.value = false;
+  }
 }
 
 // Annuler la génération
@@ -488,7 +544,23 @@ function handleKeydown(event: KeyboardEvent) {
 }
 
 function handleFormat(newText: string) {
- prompt.value = newText;
+  prompt.value = newText;
+}
+
+// Handle chat selection from side panel
+async function handleChatSelected(chatId: string) {
+  await selectChat(chatId);
+}
+
+// Handle new chat creation from side panel
+function handleNewChatCreated(chatId: string) {
+  // Messages will be loaded automatically via watch
+}
+
+// Start a new conversation
+function startNewChat() {
+  clearCurrentChat();
+  messages.value = [];
 }
 
 // Gestion du resize du container
@@ -638,7 +710,10 @@ function startResize(event: MouseEvent) {
     </div>
    </div>
 
-   <SidePanel />
+   <SidePanel
+      @chat-selected="handleChatSelected"
+      @new-chat-created="handleNewChatCreated"
+    />
   </main>
 
   <footer class="footer">
