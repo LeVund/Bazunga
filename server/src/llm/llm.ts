@@ -37,4 +37,7 @@ const tools = [
 export const llmWithTools = llm.bindTools(tools);
 
 // Registry pour exécuter les tools par leur nom
-export const toolsRegistry = new Map(tools.map((t) => [t.name, t]));
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const toolsRegistry = new Map<string, { invoke: (args: any) => Promise<any> }>(
+  tools.map((t) => [t.name, t as any])
+);
