@@ -71,12 +71,12 @@ export async function handleUserInputStream(c: Context): Promise<Response> {
         signal: abortController.signal,
       });
 
-      // Variables pour détecter les tool calls
-      let pendingToolCalls: Array<{
+      // Variables pour détecter les tool calls (accumuler par index)
+      const toolCallsMap = new Map<number, {
         id: string;
         name: string;
-        args: Record<string, any>;
-      }> = [];
+        args: string; // Arguments JSON en string, à parser à la fin
+      }>();
 
       for await (const chunk of streamResult) {
         if (abortController.signal.aborted) {
@@ -96,18 +96,38 @@ export async function handleUserInputStream(c: Context): Promise<Response> {
           await stream.writeSSE({ data: JSON.stringify(contentEvent) });
         }
 
-        // Détecter les tool calls dans le chunk
+        // Accumuler les tool_call_chunks (streaming des arguments)
         const chunkAny = chunk as any;
-        if (chunkAny.tool_calls && chunkAny.tool_calls.length > 0) {
-          for (const toolCall of chunkAny.tool_calls) {
-            pendingToolCalls.push({
-              id: toolCall.id,
-              name: toolCall.name,
-              args: toolCall.args || {},
-            });
+        if (chunkAny.tool_call_chunks && chunkAny.tool_call_chunks.length > 0) {
+          for (const toolChunk of chunkAny.tool_call_chunks) {
+            const index = toolChunk.index ?? 0;
+            const existing = toolCallsMap.get(index);
+
+            if (existing) {
+              // Accumuler les arguments
+              if (toolChunk.args) {
+                existing.args += toolChunk.args;
+              }
+            } else {
+              // Nouveau tool call
+              toolCallsMap.set(index, {
+                id: toolChunk.id || "",
+                name: toolChunk.name || "",
+                args: toolChunk.args || "",
+              });
+            }
           }
         }
       }
+
+      // Convertir la map en array et parser les arguments JSON
+      const pendingToolCalls = Array.from(toolCallsMap.values())
+        .filter(tc => tc.name) // Filtrer les entrées vides
+        .map(tc => ({
+          id: tc.id,
+          name: tc.name,
+          args: tc.args ? JSON.parse(tc.args) : {},
+        }));
 
       // 3. Gérer les tool_calls si présents
       if (pendingToolCalls.length > 0 && !abortController.signal.aborted) {
