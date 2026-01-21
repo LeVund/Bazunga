@@ -41,6 +41,8 @@ export interface ApiErrorResponse {
 
 export type ApiResponse = ApiSuccessResponse | ApiErrorResponse;
 
+import type { ShellApprovalRequest, ShellExecuteResult } from "./shell";
+
 // SSE Streaming Types
 export type SSEEventType =
   | "stream_start"
@@ -48,7 +50,10 @@ export type SSEEventType =
   | "tool_call_start"
   | "tool_call_result"
   | "stream_end"
-  | "error";
+  | "error"
+  | "shell_approval_required"
+  | "shell_auto_approved"
+  | "shell_result";
 
 export interface SSEEvent {
   type: SSEEventType;
@@ -58,6 +63,10 @@ export interface SSEEvent {
   toolResult?: { id: string; result: string };
   metrics?: GenerationMetrics;
   error?: string;
+  // Shell tool events
+  shellApprovalRequest?: ShellApprovalRequest;
+  shellAutoApproved?: { command: string; directory: string; result: ShellExecuteResult };
+  shellResult?: ShellExecuteResult & { command: string; directory: string };
 }
 
 export interface GenerationMetrics {
@@ -83,4 +92,8 @@ export interface StreamCallbacks {
   onToolCallResult?: (id: string, result: string) => void;
   onEnd?: (metrics: GenerationMetrics) => void;
   onError?: (error: string) => void;
+  // Shell tool callbacks
+  onShellApprovalRequired?: (request: ShellApprovalRequest) => void;
+  onShellAutoApproved?: (data: { command: string; directory: string; result: ShellExecuteResult }) => void;
+  onShellResult?: (result: ShellExecuteResult & { command: string; directory: string }) => void;
 }

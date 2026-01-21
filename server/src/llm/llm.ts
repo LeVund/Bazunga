@@ -9,6 +9,7 @@ import {
   TransformText,
   CountText,
 } from "./tools/randomTools";
+import { ExecuteShellCommand } from "./tools/shellTools";
 
 // Doc found here : https://v03.api.js.langchain.com/classes/_langchain_openai.ChatOpenAI.html
 export const llm = new ChatOpenAI({
@@ -24,14 +25,15 @@ export const llm = new ChatOpenAI({
 });
 
 const tools = [
-  AddNumbers,
-  Calculate,
-  GetWeather,
-  GetPopulation,
-  GetCurrentDateTime,
-  RandomNumber,
-  TransformText,
-  CountText,
+  // AddNumbers,
+  // Calculate,
+  // GetWeather,
+  // GetPopulation,
+  // GetCurrentDateTime,
+  // RandomNumber,
+  // TransformText,
+  // CountText,
+  ExecuteShellCommand,
 ];
 
 export const llmWithTools = llm.bindTools(tools);

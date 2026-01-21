@@ -20,15 +20,25 @@ import {
   handleDuplicateChat,
   handleAddMessage,
 } from "./api/routes/storage";
+import {
+  handleCheckPermission,
+  handleExecuteCommand,
+  handleApproveCommand,
+  handleGetPermissions,
+  handleAddPermission,
+  handleDeletePermission,
+  handleClearDirectoryPermissions,
+} from "./api/routes/shell";
 import { initDatabase } from "./services/database";
+import { initShellPermissions } from "./services/shellPermissions";
 
 const app = new Hono();
 
 const PORT = process.env.SERVER_PORT || 8080;
 
-// Initialize database
-initDatabase().then(() => {
-  console.log("Database initialized");
+// Initialize database and shell permissions
+Promise.all([initDatabase(), initShellPermissions()]).then(() => {
+  console.log("Database and shell permissions initialized");
 });
 
 app.use(
@@ -69,6 +79,15 @@ app.post("/chats/:id/duplicate", handleDuplicateChat);
 // Storage routes - Messages
 app.post("/chats/:chatId/messages", handleAddMessage);
 
+// Shell routes
+app.get("/shell/check", handleCheckPermission);
+app.post("/shell/execute", handleExecuteCommand);
+app.post("/shell/approve", handleApproveCommand);
+app.get("/shell/permissions", handleGetPermissions);
+app.post("/shell/permissions", handleAddPermission);
+app.delete("/shell/permissions/:id", handleDeletePermission);
+app.delete("/shell/permissions/directory", handleClearDirectoryPermissions);
+
 app.get("/", (c) => {
   return c.json({
     message: "LangChain API Server",
@@ -89,6 +108,13 @@ app.get("/", (c) => {
       "PATCH /chats/:id/move": "Move chat to folder",
       "POST /chats/:id/duplicate": "Duplicate chat",
       "POST /chats/:chatId/messages": "Add message to chat",
+      "GET /shell/check": "Check if a command is allowed",
+      "POST /shell/execute": "Execute an approved command",
+      "POST /shell/approve": "Approve and execute a command",
+      "GET /shell/permissions": "Get all shell permissions",
+      "POST /shell/permissions": "Add a shell permission",
+      "DELETE /shell/permissions/:id": "Delete a shell permission",
+      "DELETE /shell/permissions/directory": "Clear permissions for a directory",
     },
   });
 });

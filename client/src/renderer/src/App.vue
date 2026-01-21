@@ -7,8 +7,11 @@ import MarkdownToolbar from "./components/MarkdownToolbar.vue";
 import MessageActions from "./components/MessageActions.vue";
 import MessageMetrics from "./components/MessageMetrics.vue";
 import { apiService } from "./services/api";
+import { shellApi } from "./services/shellApi";
 import { useChatStorage } from "./composables/useChatStorage";
-import type { GenerationMetrics, StoredMessage } from "@core/types";
+import ShellApproval from "./components/ShellApproval.vue";
+import ShellCommandDisplay from "./components/ShellCommandDisplay.vue";
+import type { GenerationMetrics, StoredMessage, ShellApprovalRequest, ResolvedShellCommand } from "@core/types";
 
 interface Message {
   id: number;
@@ -24,6 +27,11 @@ interface Message {
     metrics?: GenerationMetrics;
     isDeletedPlaceholder?: boolean;
     modelName?: string;
+    // Shell approval
+    pendingShellApproval?: ShellApprovalRequest;
+    shellApprovalHandled?: boolean;
+    // Commandes shell résolues (historique)
+    shellCommands?: ResolvedShellCommand[];
   };
 }
 
@@ -192,14 +200,22 @@ async function sendPrompt() {
           const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
           if (idx !== -1) {
             messages.value[idx].isStreaming = false;
-            messages.value[idx].metadata = { metrics };
+            // Préserver les shellCommands existantes
+            const existingShellCommands = messages.value[idx].metadata?.shellCommands;
+            messages.value[idx].metadata = {
+              ...messages.value[idx].metadata,
+              metrics,
+            };
 
-            // Save assistant message to storage
+            // Save assistant message to storage (avec shellCommands si présentes)
             await addStoredMessage({
               type: "assistant",
               content: messages.value[idx].content,
               timestamp: messages.value[idx].timestamp,
-              metadata: { metrics },
+              metadata: {
+                metrics,
+                shellCommands: existingShellCommands,
+              },
             });
           }
           isLoading.value = false;
@@ -218,6 +234,38 @@ async function sendPrompt() {
           currentStreamingMessageId = null;
           streamStartTime = null;
           streamTokenCount = 0;
+        },
+        onShellApprovalRequired: (request) => {
+          const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
+          if (idx !== -1) {
+            messages.value[idx].metadata = {
+              ...messages.value[idx].metadata,
+              pendingShellApproval: request,
+            };
+          }
+        },
+        onShellAutoApproved: (data) => {
+          const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
+          if (idx !== -1) {
+            // Créer une commande résolue avec statut auto_approved
+            const resolvedCommand: ResolvedShellCommand = {
+              id: `auto_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+              command: data.command,
+              directory: data.directory,
+              status: "auto_approved",
+              timestamp: Date.now(),
+              result: data.result,
+            };
+
+            // Ajouter aux commandes shell du message
+            if (!messages.value[idx].metadata) {
+              messages.value[idx].metadata = {};
+            }
+            if (!messages.value[idx].metadata!.shellCommands) {
+              messages.value[idx].metadata!.shellCommands = [];
+            }
+            messages.value[idx].metadata!.shellCommands!.push(resolvedCommand);
+          }
         },
       },
     );
@@ -428,7 +476,10 @@ async function regenerateMessage(messageId: number) {
      const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
      if (idx !== -1) {
       messages.value[idx].isStreaming = false;
-      messages.value[idx].metadata = { metrics };
+      messages.value[idx].metadata = {
+       ...messages.value[idx].metadata,
+       metrics,
+      };
      }
      isLoading.value = false;
      currentStreamingMessageId = null;
@@ -446,6 +497,35 @@ async function regenerateMessage(messageId: number) {
      currentStreamingMessageId = null;
      streamStartTime = null;
      streamTokenCount = 0;
+    },
+    onShellApprovalRequired: (request) => {
+     const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
+     if (idx !== -1) {
+      messages.value[idx].metadata = {
+       ...messages.value[idx].metadata,
+       pendingShellApproval: request,
+      };
+     }
+    },
+    onShellAutoApproved: (data) => {
+     const idx = messages.value.findIndex((m) => m.id === assistantMessage.id);
+     if (idx !== -1) {
+      const resolvedCommand: ResolvedShellCommand = {
+       id: `auto_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+       command: data.command,
+       directory: data.directory,
+       status: "auto_approved",
+       timestamp: Date.now(),
+       result: data.result,
+      };
+      if (!messages.value[idx].metadata) {
+       messages.value[idx].metadata = {};
+      }
+      if (!messages.value[idx].metadata!.shellCommands) {
+       messages.value[idx].metadata!.shellCommands = [];
+      }
+      messages.value[idx].metadata!.shellCommands!.push(resolvedCommand);
+     }
     },
    },
   );
@@ -500,7 +580,7 @@ async function continueMessage(messageId: number) {
     },
     onEnd: (metrics) => {
      message.isStreaming = false;
-     message.metadata = { metrics };
+     message.metadata = { ...message.metadata, metrics };
      isLoading.value = false;
      currentStreamingMessageId = null;
      streamStartTime = null;
@@ -514,6 +594,29 @@ async function continueMessage(messageId: number) {
      streamStartTime = null;
      streamTokenCount = 0;
     },
+    onShellApprovalRequired: (request) => {
+     message.metadata = {
+      ...message.metadata,
+      pendingShellApproval: request,
+     };
+    },
+    onShellAutoApproved: (data) => {
+     const resolvedCommand: ResolvedShellCommand = {
+      id: `auto_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      command: data.command,
+      directory: data.directory,
+      status: "auto_approved",
+      timestamp: Date.now(),
+      result: data.result,
+     };
+     if (!message.metadata) {
+      message.metadata = {};
+     }
+     if (!message.metadata.shellCommands) {
+      message.metadata.shellCommands = [];
+     }
+     message.metadata.shellCommands.push(resolvedCommand);
+    },
    },
   );
  } catch (error) {
@@ -524,6 +627,145 @@ async function continueMessage(messageId: number) {
   streamStartTime = null;
   streamTokenCount = 0;
  }
+}
+
+// === Shell Approval Handlers ===
+
+async function handleShellApprove(messageId: number) {
+  const message = messages.value.find((m) => m.id === messageId);
+  if (!message?.metadata?.pendingShellApproval) return;
+
+  const request = message.metadata.pendingShellApproval;
+
+  try {
+    const result = await shellApi.approveCommand({
+      id: request.id,
+      decision: "approve",
+      command: request.command,
+      directory: request.directory,
+    });
+
+    // Créer la commande résolue
+    const resolvedCommand: ResolvedShellCommand = {
+      id: request.id,
+      command: request.command,
+      directory: request.directory,
+      status: "approved",
+      timestamp: Date.now(),
+      result: result.executed ? result.result : undefined,
+    };
+
+    // Ajouter aux commandes shell du message
+    if (!message.metadata.shellCommands) {
+      message.metadata.shellCommands = [];
+    }
+    message.metadata.shellCommands.push(resolvedCommand);
+
+    // Marquer comme traité
+    message.metadata.shellApprovalHandled = true;
+    message.metadata.pendingShellApproval = undefined;
+  } catch (error) {
+    // En cas d'erreur, créer quand même une commande résolue avec l'erreur
+    const resolvedCommand: ResolvedShellCommand = {
+      id: request.id,
+      command: request.command,
+      directory: request.directory,
+      status: "approved",
+      timestamp: Date.now(),
+      result: {
+        success: false,
+        error: error instanceof Error ? error.message : "Erreur inconnue",
+      },
+    };
+
+    if (!message.metadata.shellCommands) {
+      message.metadata.shellCommands = [];
+    }
+    message.metadata.shellCommands.push(resolvedCommand);
+
+    message.metadata.shellApprovalHandled = true;
+    message.metadata.pendingShellApproval = undefined;
+  }
+}
+
+async function handleShellAlwaysApprove(messageId: number) {
+  const message = messages.value.find((m) => m.id === messageId);
+  if (!message?.metadata?.pendingShellApproval) return;
+
+  const request = message.metadata.pendingShellApproval;
+
+  try {
+    const result = await shellApi.approveCommand({
+      id: request.id,
+      decision: "always_approve",
+      command: request.command,
+      directory: request.directory,
+    });
+
+    // Créer la commande résolue avec statut "always_approved"
+    const resolvedCommand: ResolvedShellCommand = {
+      id: request.id,
+      command: request.command,
+      directory: request.directory,
+      status: "always_approved",
+      timestamp: Date.now(),
+      result: result.executed ? result.result : undefined,
+    };
+
+    // Ajouter aux commandes shell du message
+    if (!message.metadata.shellCommands) {
+      message.metadata.shellCommands = [];
+    }
+    message.metadata.shellCommands.push(resolvedCommand);
+
+    message.metadata.shellApprovalHandled = true;
+    message.metadata.pendingShellApproval = undefined;
+  } catch (error) {
+    const resolvedCommand: ResolvedShellCommand = {
+      id: request.id,
+      command: request.command,
+      directory: request.directory,
+      status: "always_approved",
+      timestamp: Date.now(),
+      result: {
+        success: false,
+        error: error instanceof Error ? error.message : "Erreur inconnue",
+      },
+    };
+
+    if (!message.metadata.shellCommands) {
+      message.metadata.shellCommands = [];
+    }
+    message.metadata.shellCommands.push(resolvedCommand);
+
+    message.metadata.shellApprovalHandled = true;
+    message.metadata.pendingShellApproval = undefined;
+  }
+}
+
+function handleShellReject(messageId: number) {
+  const message = messages.value.find((m) => m.id === messageId);
+  if (!message?.metadata?.pendingShellApproval) return;
+
+  const request = message.metadata.pendingShellApproval;
+
+  // Créer la commande résolue avec statut "rejected"
+  const resolvedCommand: ResolvedShellCommand = {
+    id: request.id,
+    command: request.command,
+    directory: request.directory,
+    status: "rejected",
+    timestamp: Date.now(),
+  };
+
+  // Ajouter aux commandes shell du message
+  if (!message.metadata.shellCommands) {
+    message.metadata.shellCommands = [];
+  }
+  message.metadata.shellCommands.push(resolvedCommand);
+
+  message.metadata.shellApprovalHandled = true;
+  message.metadata.pendingShellApproval = undefined;
 }
 
 async function fetchRoute(path: string) {
@@ -666,6 +908,23 @@ function startResize(event: MouseEvent) {
           </div>
          </template>
          <MarkdownRenderer v-else :content="message.content" />
+
+         <!-- Shell Approval Component (en attente d'approbation) -->
+         <ShellApproval
+          v-if="message.metadata?.pendingShellApproval && !message.metadata?.shellApprovalHandled"
+          :request="message.metadata.pendingShellApproval"
+          @approve="handleShellApprove(message.id)"
+          @always-approve="handleShellAlwaysApprove(message.id)"
+          @reject="handleShellReject(message.id)"
+         />
+
+         <!-- Shell Commands Display (commandes résolues) -->
+         <ShellCommandDisplay
+          v-for="shellCmd in message.metadata?.shellCommands || []"
+          :key="shellCmd.id"
+          :command="shellCmd"
+         />
+
          <div v-if="message.isStreaming" class="streaming-indicator">
           <div class="streaming-dot"></div>
          </div>

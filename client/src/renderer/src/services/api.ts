@@ -5,6 +5,8 @@ import {
   StreamPromptRequest,
   StreamCallbacks,
   ToolCall,
+  ShellApprovalRequest,
+  ShellExecuteResult,
 } from "@core/types";
 
 export interface ClientApiResponse {
@@ -272,6 +274,24 @@ Voici une réponse mockée à votre question. En production, cette réponse vien
                 case "error":
                   callbacks.onError?.(event.error || "Unknown error");
                   this.currentMessageId = null;
+                  break;
+
+                case "shell_approval_required":
+                  if (event.shellApprovalRequest) {
+                    callbacks.onShellApprovalRequired?.(event.shellApprovalRequest);
+                  }
+                  break;
+
+                case "shell_auto_approved":
+                  if (event.shellAutoApproved) {
+                    callbacks.onShellAutoApproved?.(event.shellAutoApproved);
+                  }
+                  break;
+
+                case "shell_result":
+                  if (event.shellResult) {
+                    callbacks.onShellResult?.(event.shellResult);
+                  }
                   break;
               }
             } catch (parseError) {

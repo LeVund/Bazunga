@@ -10,6 +10,15 @@ import {
   StreamPromptRequest,
 } from "@core/types/langchain";
 import { HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
+import {
+  needsApproval,
+  isBlocked,
+  isAutoApproved,
+  NEEDS_APPROVAL_PREFIX,
+  BLOCKED_PREFIX,
+  AUTO_APPROVED_PREFIX,
+} from "../../llm/tools/shellTools";
+import { waitForApproval } from "../../services/pendingApprovals";
 
 // Map pour tracker les streams actifs
 const activeStreams = new Map<string, AbortController>();
@@ -159,6 +168,57 @@ export async function handleUserInputStream(c: Context): Promise<Response> {
             }
           } else {
             result = `Tool "${toolCall.name}" not found`;
+          }
+
+          // Vérifier si c'est un shell tool qui nécessite une approbation ou est auto-approuvé
+          const approvalRequest = needsApproval(result);
+          const blockedInfo = isBlocked(result);
+          const autoApprovedInfo = isAutoApproved(result);
+
+          if (autoApprovedInfo) {
+            // Commande auto-approuvée (whitelistée), envoyer l'événement SSE
+            const autoApprovedEvent: SSEEvent = {
+              type: "shell_auto_approved",
+              shellAutoApproved: {
+                command: autoApprovedInfo.command,
+                directory: autoApprovedInfo.directory,
+                result: autoApprovedInfo.result,
+              },
+            };
+            await stream.writeSSE({ data: JSON.stringify(autoApprovedEvent) });
+
+            // Transformer le résultat pour le LLM
+            if (autoApprovedInfo.result.success) {
+              result = autoApprovedInfo.result.stdout || "(aucune sortie)";
+            } else {
+              result = `Erreur d'exécution: ${autoApprovedInfo.result.error || autoApprovedInfo.result.stderr}`;
+            }
+          } else if (approvalRequest) {
+            // Envoyer l'événement d'approbation requise
+            const approvalEvent: SSEEvent = {
+              type: "shell_approval_required",
+              shellApprovalRequest: approvalRequest,
+            };
+            await stream.writeSSE({ data: JSON.stringify(approvalEvent) });
+
+            // Attendre la décision de l'utilisateur (pause le stream)
+            const approvalResult = await waitForApproval(approvalRequest);
+
+            if (approvalResult.decision === "reject") {
+              result = `La commande "${approvalRequest.command}" a été refusée par l'utilisateur.`;
+            } else if (approvalResult.result) {
+              // Commande exécutée (approve ou always_approve)
+              if (approvalResult.result.success) {
+                result = approvalResult.result.stdout || "(aucune sortie)";
+              } else {
+                result = `Erreur d'exécution: ${approvalResult.result.error || approvalResult.result.stderr}`;
+              }
+            } else {
+              result = `La commande "${approvalRequest.command}" a été approuvée mais aucun résultat n'a été retourné.`;
+            }
+          } else if (blockedInfo) {
+            // La commande est bloquée
+            result = `La commande "${blockedInfo.command}" est bloquée pour des raisons de sécurité: ${blockedInfo.reason}`;
           }
 
           // Ajouter le résultat aux messages

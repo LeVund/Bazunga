@@ -1,4 +1,5 @@
 import type { GenerationMetrics } from "./langchain";
+import type { ResolvedShellCommand } from "./shell";
 
 export interface Folder {
   id: string;
@@ -30,6 +31,7 @@ export interface StoredMessage {
   metadata?: {
     metrics?: GenerationMetrics;
     modelName?: string;
+    shellCommands?: ResolvedShellCommand[];  // Commandes shell utilisées dans ce message
   };
 }
 
